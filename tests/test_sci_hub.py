@@ -4,7 +4,7 @@ import tempfile
 import shutil
 import os
 import requests
-from paper_search_mcp.academic_platforms.sci_hub import SciHubFetcher
+from paper_toolkit_mcp.academic_platforms.sci_hub import SciHubFetcher
 
 
 def check_sci_hub_accessible():

@@ -1,40 +1,209 @@
-# Paper Search MCP
+﻿# Scholar Toolkit MCP
 
-A Model Context Protocol (MCP) server for searching and downloading academic papers from multiple sources. The project follows a free-first strategy: prioritize open and public data sources, support optional API keys when they improve stability or coverage, and keep source-specific connectors extensible for advanced users.
+> **Fork Notice**: This is a fork of [openags/paper-toolkit-mcp](https://github.com/openags/paper-toolkit-mcp),
+> originally created by [P.S Zhang](https://github.com/openags). This fork extends the project with manuscript
+> processing, search caching, and citation export features. Both versions are licensed under MIT.
 
-![PyPI](https://img.shields.io/pypi/v/paper-search-mcp.svg) ![License](https://img.shields.io/badge/license-MIT-blue.svg) ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
-[![smithery badge](https://smithery.ai/badge/@openags/paper-search-mcp)](https://smithery.ai/server/@openags/paper-search-mcp)
+A comprehensive MCP toolkit for paper searching, manuscript processing, and academic research workflows. The project follows a free-first strategy: prioritize open and public data sources, support optional API keys when they improve stability or coverage, and keep source-specific connectors extensible for advanced users.
+
+**New Features (v0.2.0)**: Manuscript processing with citation placeholders, search caching, BibTeX/RIS export, and one-click Word document generation.
+
+![PyPI](https://img.shields.io/pypi/v/paper-toolkit-mcp.svg) ![License](https://img.shields.io/badge/license-MIT-blue.svg) ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+
+---
+
+## Manuscript Processing (New)
+
+### Workflow
+
+1. **Write** your paper in Markdown with citation placeholders
+2. **Process** with `paper-toolkit manuscript` command
+3. **Import** `refs.ris` to Zotero (optional)
+4. **Submit** the generated `draft_final.docx`
+
+### Supported Placeholders
+
+```markdown
+[@doi:10.1038/s41591-020-0001-2]
+[@pmid:32145678]
+[@arxiv:2106.12345]
+[@title:Attention Is All You Need]
+```
+
+### Usage
+
+```bash
+# Basic usage (generates formatted markdown + BibTeX + RIS)
+paper-toolkit manuscript draft.md
+
+# With Word document generation (requires pandoc)
+paper-toolkit manuscript draft.md --docx
+
+# Specify citation style
+paper-toolkit manuscript draft.md -s apa
+paper-toolkit manuscript draft.md -s ieee
+paper-toolkit manuscript draft.md -s gb7714
+
+# Custom output directory
+paper-toolkit manuscript draft.md -o ./output
+
+# Disable specific outputs
+paper-toolkit manuscript draft.md --no-bib --no-ris
+```
+
+### Citation Styles
+
+| Style | Code | Description |
+|-------|------|-------------|
+| GB/T 7714-2015 | `gb7714` | Chinese national standard (numeric) |
+| APA 7th | `apa` | American Psychological Association |
+| IEEE | `ieee` | Institute of Electrical and Electronics Engineers |
+| Vancouver | `vancouver` | International Committee of Medical Journal Editors |
+| Harvard | `harvard` | Author-date format |
+
+### Output Files
+
+After processing, you get:
+- `draft_formatted.md` - Markdown with numbered citations [1], [2], ...
+- `draft_final.docx` - Word document (if `--docx` used and pandoc installed)
+- `refs.bib` - BibTeX file (can be imported to Zotero/JabRef)
+- `refs.ris` - RIS file (Zotero/EndNote/Mendeley compatible)
+- `draft_references.txt` - Plain text reference list
+
+---
+
+## Search Caching (New)
+
+### How It Works
+
+- Search results are cached as JSON files in `.paper_cache/`
+- Cache location is **relative to current working directory**
+- Follows your project folder — copy the folder, cache moves with it
+- TTL (time-to-live) is 24 hours by default
+
+### Cache Location
+
+```
+your_project/
+├── draft.md
+├── refs.bib
+└── .paper_cache/          ← Cache is here
+    ├── abc123.json        ← Cached search results
+    └── def456.json
+```
+
+### Manage Cache
+
+```bash
+# List cached items
+paper-toolkit cache list
+
+# Clear all cache
+paper-toolkit cache clear
+```
+
+Or via MCP tools: `cache_list()`, `cache_clear()`
+
+---
+
+## CLI Usage
+
+```bash
+# Search papers
+paper-toolkit search "machine learning" -s arxiv,semantic -n 10
+
+# Download PDF
+paper-toolkit download arxiv 2106.12345
+
+# Read paper (extract text)
+paper-toolkit read arxiv 2106.12345
+
+# Get paper metadata
+paper-toolkit search "attention is all you need" -s crossref -n 1
+
+# Process manuscript
+paper-toolkit manuscript draft.md -s gb7714 --docx
+
+# Cache management
+paper-toolkit cache list
+paper-toolkit cache clear
+
+# List available sources
+paper-toolkit sources
+```
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [New Features](#new-features-v020)
 - [Project Principles](#project-principles)
 - [Features](#features)
 - [Source Strategy](#source-strategy)
 - [Sci-Hub Notice](#sci-hub-notice)
 - [Installation](#installation)
-  - [Claude Code (Skill)](#claude-code-skill--recommended-for-claude-code-users)
-  - [Method 1 — Smithery](#method-1--smithery-one-command-recommended-for-claude-desktop)
-  - [Method 2 — uvx](#method-2--uvx-no-install-always-latest)
-  - [Method 3 — uv](#method-3--uv-persistent-install)
-  - [Method 4 — pip](#method-4--pip-standard-python-install)
-  - [Method 5 — npx](#method-5--npx-via-smithery-cli-no-local-python-needed)
-  - [Method 6 — Docker](#method-6--docker)
-  - [Method 7 — Clone & run from source](#method-7--clone--run-from-source-development--recommended-for-macos-local)
+  - [Method 1 — Local Deployment (Clone & Run)](#method-1--local-deployment-clone--run-recommended)
+  - [Method 2 — Smithery](#method-2--smithery-one-command-recommended-for-claude-desktop)
+  - [Method 3 — uvx](#method-3--uvx-no-install-always-latest)
+  - [Method 4 — uv](#method-4--uv-persistent-install)
+  - [Method 5 — pip](#method-5--pip-standard-python-install)
   - [Environment Variables](#environment-variables-env-file)
+- [Manuscript Processing](#manuscript-processing-new)
+- [Search Caching](#search-caching-new)
+- [CLI Usage](#cli-usage)
 - [Contributing](#contributing)
-- [Demo](#demo)
 - [Star History](#star-history)
 - [License](#license)
 - [TODO](#todo)
 
 ---
 
+## New Features (v0.2.0)
+
+### Manuscript Processing
+
+Write your paper in Markdown with citation placeholders, then generate a formatted Word document with references automatically:
+
+```markdown
+# Introduction
+Deep learning has made significant progress in medical imaging[@doi:10.1038/s41591-020-0001-2].
+Transformer architecture revolutionized NLP[@title:Attention Is All You Need].
+```
+
+Process it:
+```bash
+paper-toolkit manuscript draft.md -s gb7714 --docx
+```
+
+Output:
+- `draft_formatted.md` - Text with numbered citations [1], [2], ...
+- `refs.bib` - BibTeX file (for Zotero/EndNote import)
+- `refs.ris` - RIS file (Zotero compatible)
+- `draft_final.docx` - Word document with formatted references
+
+Supported placeholders: `[@doi:...]`, `[@pmid:...]`, `[@arxiv:...]`, `[@title:...]`
+
+Supported citation styles: GB/T 7714-2015, APA 7th, IEEE, Vancouver, Harvard
+
+### Search Caching
+
+Search results are automatically cached in `.paper_cache/` (relative to current working directory):
+- **Follows your workspace**: Cache is saved in the folder you're working in
+- **Portable**: Copy your project folder and cache moves with it
+- **Easy management**: Users can manually delete `.paper_cache/` to clear
+
+### MCP Tools Added
+- `process_manuscript` - Process manuscript with citations
+- `get_paper_metadata` - Get paper metadata by identifier
+- `export_references` - Export references in BibTeX/RIS/text format
+- `cache_list` / `cache_clear` - Manage search cache
+
+---
+
 ## Overview
 
-`paper-search-mcp` is a Python-based tool for searching and downloading academic papers from various platforms. It provides tools for searching papers, downloading PDFs, and extracting text, making it ideal for researchers and AI-driven workflows. It can be used as an MCP server (for Claude Desktop and other MCP clients) or as a Claude Code skill with a CLI interface.
+`paper-toolkit-mcp` is a Python-based tool for searching and downloading academic papers from various platforms. It provides tools for searching papers, downloading PDFs, and extracting text, making it ideal for researchers and AI-driven workflows. It can be used as an MCP server (for Claude Desktop and other MCP clients) or as a Claude Code skill with a CLI interface.
 
 ## Project Principles
 
@@ -86,7 +255,7 @@ This matrix reflects **verified live-integration results** from functional and e
 | PubMed | ✅ | ❌ | ⚠️ info-only | Open API; reliable |
 | bioRxiv | ✅ | ✅ | ✅ | Open API; reliable |
 | medRxiv | ✅ | ✅ | ✅ | Open API; reliable |
-| Google Scholar | ⚠️ | ❌ | ❌ | Bot-detection active; set `PAPER_SEARCH_MCP_GOOGLE_SCHOLAR_PROXY_URL` |
+| Google Scholar | ⚠️ | ❌ | ❌ | Bot-detection active; set `paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL` |
 | IACR | ✅ | ✅ | ✅ | Open API; reliable |
 | Semantic Scholar | ✅ | ✅ (OA) | ✅ (OA) | Works without key (rate-limited); key improves limits; key rejection (403) retried automatically without key |
 | Crossref | ✅ | ❌ | ⚠️ info-only | Open API; reliable |
@@ -102,10 +271,10 @@ This matrix reflects **verified live-integration results** from functional and e
 | Zenodo | ✅ | ✅ (record-dependent) | ✅ (record-dependent) | Open API; reliable |
 | HAL | ✅ | ✅ (record-dependent) | ✅ (record-dependent) | Open API; reliable |
 | SSRN | ⚠️ | ⚠️ best-effort | ⚠️ best-effort | 403 bot-detection active; public PDF only |
-| Unpaywall | ✅ (DOI lookup) | ❌ | ❌ | **Requires** `PAPER_SEARCH_MCP_UNPAYWALL_EMAIL` |
+| Unpaywall | ✅ (DOI lookup) | ❌ | ❌ | **Requires** `paper_toolkit_mcp_UNPAYWALL_EMAIL` |
 | Sci-Hub (optional) | ⚠️ fallback-only | ✅ | ❌ | Optional; unstable mirrors; user responsibility |
-| **IEEE Xplore** 🔑 | 🚧 skeleton | 🚧 skeleton | 🚧 skeleton | Requires `PAPER_SEARCH_MCP_IEEE_API_KEY` to activate |
-| **ACM DL** 🔑 | 🚧 skeleton | 🚧 skeleton | 🚧 skeleton | Requires `PAPER_SEARCH_MCP_ACM_API_KEY` to activate |
+| **IEEE Xplore** 🔑 | 🚧 skeleton | 🚧 skeleton | 🚧 skeleton | Requires `paper_toolkit_mcp_IEEE_API_KEY` to activate |
+| **ACM DL** 🔑 | 🚧 skeleton | 🚧 skeleton | 🚧 skeleton | Requires `paper_toolkit_mcp_ACM_API_KEY` to activate |
 
 > ✅ = reliable in live tests.  ⚠️ = works but subject to upstream instability or access restrictions.  ❌ = not supported.  🔑 = key required.  🚧 = skeleton only.
 
@@ -117,16 +286,16 @@ All keys are **optional** unless noted. Configure them in `.env` (preferred) or 
 
 | Environment Variable | Provider | Required? | How to obtain |
 |---|---|---|---|
-| `PAPER_SEARCH_MCP_UNPAYWALL_EMAIL` | Unpaywall | **Yes** (Unpaywall disabled without it) | Any valid email; register at [unpaywall.org](https://unpaywall.org/products/api) |
-| `PAPER_SEARCH_MCP_CORE_API_KEY` | CORE | Recommended | Free at [core.ac.uk/services/api](https://core.ac.uk/services/api) |
-| `PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY` | Semantic Scholar | Optional | Free at [semanticscholar.org](https://www.semanticscholar.org/product/api) — improves rate limits |
-| `PAPER_SEARCH_MCP_GOOGLE_SCHOLAR_PROXY_URL` | Google Scholar | Optional | Your HTTP/HTTPS proxy URL — bypasses bot-detection |
-| `PAPER_SEARCH_MCP_DOAJ_API_KEY` | DOAJ | Optional | Free at [doaj.org](https://doaj.org/apply-for-api-key/) — raises hourly rate limit |
-| `PAPER_SEARCH_MCP_ZENODO_ACCESS_TOKEN` | Zenodo | Optional | Free at [zenodo.org](https://zenodo.org/account/settings/applications/) — required for private records |
-| `PAPER_SEARCH_MCP_IEEE_API_KEY` | IEEE Xplore | **Required to activate** | Free at [developer.ieee.org](https://developer.ieee.org/) |
-| `PAPER_SEARCH_MCP_ACM_API_KEY` | ACM DL | **Required to activate** | See [libraries.acm.org/digital-library/acm-open](https://libraries.acm.org/digital-library/acm-open) |
+| `paper_toolkit_mcp_UNPAYWALL_EMAIL` | Unpaywall | **Yes** (Unpaywall disabled without it) | Any valid email; register at [unpaywall.org](https://unpaywall.org/products/api) |
+| `paper_toolkit_mcp_CORE_API_KEY` | CORE | Recommended | Free at [core.ac.uk/services/api](https://core.ac.uk/services/api) |
+| `paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY` | Semantic Scholar | Optional | Free at [semanticscholar.org](https://www.semanticscholar.org/product/api) — improves rate limits |
+| `paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL` | Google Scholar | Optional | Your HTTP/HTTPS proxy URL — bypasses bot-detection |
+| `paper_toolkit_mcp_DOAJ_API_KEY` | DOAJ | Optional | Free at [doaj.org](https://doaj.org/apply-for-api-key/) — raises hourly rate limit |
+| `paper_toolkit_mcp_ZENODO_ACCESS_TOKEN` | Zenodo | Optional | Free at [zenodo.org](https://zenodo.org/account/settings/applications/) — required for private records |
+| `paper_toolkit_mcp_IEEE_API_KEY` | IEEE Xplore | **Required to activate** | Free at [developer.ieee.org](https://developer.ieee.org/) |
+| `paper_toolkit_mcp_ACM_API_KEY` | ACM DL | **Required to activate** | See [libraries.acm.org/digital-library/acm-open](https://libraries.acm.org/digital-library/acm-open) |
 
-All variables follow the `PAPER_SEARCH_MCP_<NAME>` prefix scheme. Legacy names without the prefix (e.g. `CORE_API_KEY`, `UNPAYWALL_EMAIL`) are still supported for backward compatibility.
+All variables follow the `paper_toolkit_mcp_<NAME>` prefix scheme. Legacy names without the prefix (e.g. `CORE_API_KEY`, `UNPAYWALL_EMAIL`) are still supported for backward compatibility.
 
 ---
 
@@ -136,15 +305,15 @@ Some search failures are caused by external provider instability, not by bugs in
 
 | Source | Symptom | Cause | Workaround |
 |---|---|---|---|
-| Google Scholar | Returns 0 results / empty HTML | Bot-detection (CAPTCHA) | Set `PAPER_SEARCH_MCP_GOOGLE_SCHOLAR_PROXY_URL` to a proxy |
-| Semantic Scholar | 429 rate-limited responses | Anonymous access rate limit | Set `PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY`; if key is rejected (403) connector automatically retries without key |
-| CORE | 500 / timeout errors | Unauthenticated rate limiting | Set `PAPER_SEARCH_MCP_CORE_API_KEY` (free); connector retries with exponential backoff and falls back to key-less on 401/403 |
+| Google Scholar | Returns 0 results / empty HTML | Bot-detection (CAPTCHA) | Set `paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL` to a proxy |
+| Semantic Scholar | 429 rate-limited responses | Anonymous access rate limit | Set `paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY`; if key is rejected (403) connector automatically retries without key |
+| CORE | 500 / timeout errors | Unauthenticated rate limiting | Set `paper_toolkit_mcp_CORE_API_KEY` (free); connector retries with exponential backoff and falls back to key-less on 401/403 |
 | OpenAIRE | Transient 403 responses | IP-based session rate limiting | Connector retries 3× per profile, escalating: plain session → XML Accept header → raw `requests.get` with Mozilla UA |
 | CiteSeerX | 404 via web archive redirect | PSU endpoint intermittently redirects to archive | No workaround; connector returns empty gracefully |
 | BASE | Search returns 0 results | OAI-PMH endpoint requires institutional IP registration | Register at [base-search.net](https://www.base-search.net/about/en/) for API access; connector returns empty gracefully otherwise |
 | SSRN | HTTP 403 | Bot-detection (Cloudflare) | No workaround; connector tries two endpoints and returns a clear message on failure |
 | PMC / Europe PMC | PDF download ProxyError | Local proxy blocking direct HTTPS PDF download | Disable proxy or use `download_with_fallback` instead |
-| Unpaywall | Skipped entirely | `UNPAYWALL_EMAIL` env var not set | Set `PAPER_SEARCH_MCP_UNPAYWALL_EMAIL` in `.env` |
+| Unpaywall | Skipped entirely | `UNPAYWALL_EMAIL` env var not set | Set `paper_toolkit_mcp_UNPAYWALL_EMAIL` in `.env` |
 
 ## Optional Paid Platform Connectors (Phase 3)
 
@@ -153,14 +322,14 @@ They are **disabled by default** — no API calls are made unless you explicitly
 
 | Platform | Env Var | Status |
 |---|---|---|
-| IEEE Xplore | `PAPER_SEARCH_MCP_IEEE_API_KEY` | 🚧 skeleton — search registered, download/read raise `NotImplementedError` |
-| ACM Digital Library | `PAPER_SEARCH_MCP_ACM_API_KEY` | 🚧 skeleton — search registered, download/read raise `NotImplementedError` |
+| IEEE Xplore | `paper_toolkit_mcp_IEEE_API_KEY` | 🚧 skeleton — search registered, download/read raise `NotImplementedError` |
+| ACM Digital Library | `paper_toolkit_mcp_ACM_API_KEY` | 🚧 skeleton — search registered, download/read raise `NotImplementedError` |
 
 **How to enable:**
 
 ```bash
-export PAPER_SEARCH_MCP_IEEE_API_KEY=<your_ieee_key>       # free key at https://developer.ieee.org/
-export PAPER_SEARCH_MCP_ACM_API_KEY=<your_acm_key>         # see https://libraries.acm.org/digital-library
+export paper_toolkit_mcp_IEEE_API_KEY=<your_ieee_key>       # free key at https://developer.ieee.org/
+export paper_toolkit_mcp_ACM_API_KEY=<your_acm_key>         # see https://libraries.acm.org/digital-library
 ```
 
 Once a key is set, the corresponding source is automatically added to `ALL_SOURCES` and its MCP tools (`search_ieee` / `search_acm`, `download_ieee` / `download_acm`, `read_ieee_paper` / `read_acm_paper`) are registered at server startup.
@@ -195,43 +364,6 @@ Choose the method that best fits your workflow. All methods support the same [op
 
 ---
 
-### Claude Code (Skill) — recommended for Claude Code users
-
-Install as a Claude Code skill instead of an MCP server. This gives Claude automatic access to paper search when you mention finding papers, academic literature, etc. — no MCP configuration needed.
-
-**Prerequisites**: [uv](https://docs.astral.sh/uv/getting-started/installation/) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview).
-
-**Step 1 — Clone the repo:**
-
-```bash
-git clone https://github.com/openags/paper-search-mcp.git ~/paper-search-mcp
-```
-
-**Step 2 — Install the skill:**
-
-```bash
-mkdir -p ~/.claude/skills/paper-search
-cp ~/paper-search-mcp/claude-code/SKILL.md ~/.claude/skills/paper-search/SKILL.md
-```
-
-**Step 3 — Update the repo path in the skill:**
-
-Edit `~/.claude/skills/paper-search/SKILL.md` and replace every `<REPO_PATH>` with the absolute path to your clone (e.g. `/Users/yourname/paper-search-mcp`).
-
-**Step 4 (optional) — Configure API keys:**
-
-Create a `.env` file in the repo root for optional API keys (see [Environment Variables](#environment-variables-env-file)).
-
-**That's it.** Next time you start Claude Code, just ask it to find papers — the skill activates automatically. For example:
-
-- "Find me recent papers on CRISPR base editing"
-- "Search arxiv and semantic scholar for transformer attention mechanisms"
-- "Download the PDF for arxiv paper 2106.12345"
-
-The skill uses a CLI (`paper-search`) that wraps the same library as the MCP server, outputting JSON for search/download and plain text for read.
-
----
-
 > **MCP Server Config file locations** (for methods below)
 > - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 > - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -239,10 +371,69 @@ The skill uses a CLI (`paper-search`) that wraps the same library as the MCP ser
 
 ---
 
+### Method 1 — Local Deployment (Clone & Run) — Recommended
+
+This is the most reliable method — you have full control and can customize the installation.
+
+```bash
+# 1. Clone your forked repo
+git clone https://github.com/YOUR_USERNAME/paper-toolkit-mcp.git
+cd paper-toolkit-mcp
+
+# 2. Install dependencies (using uv, recommended)
+# Install uv if you don't have it: https://docs.astral.sh/uv/getting-started/installation/
+uv venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
+uv pip install -e ".[dev]"
+
+# 3. Verify it works
+uv run -m paper_toolkit_mcp.server
+# or
+paper-toolkit search "machine learning" -s arxiv,semantic
+```
+
+**Claude Desktop / Trae IDE config** (replace the path with your actual clone location):
+
+```json
+{
+  "mcpServers": {
+    "paper-toolkit-mcp": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory", "D:/Codes/paper-toolkit-mcp",
+        "-m", "paper_toolkit_mcp.server"
+      ],
+      "env": {
+        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
+        "paper_toolkit_mcp_CORE_API_KEY": "",
+        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": ""
+      }
+    }
+  }
+}
+```
+
+**For Trae IDE** on Windows, edit the MCP settings file at the location shown in Trae's settings UI, or use the `python -m` method:
+
+```json
+{
+  "mcpServers": {
+    "paper-toolkit-mcp": {
+      "command": "python",
+      "args": ["-m", "paper_toolkit_mcp.server"]
+    }
+  }
+}
+```
+
+Make sure to run this from your project directory, or set the `cwd` appropriately.
+
+---
+
 ### Method 1 — Smithery (one-command, recommended for Claude Desktop)
 
 ```bash
-npx -y @smithery/cli install @openags/paper-search-mcp --client claude
+npx -y @smithery/cli install @openags/paper-toolkit-mcp --client claude
 ```
 
 Smithery automatically writes the correct config block for you. No manual JSON editing needed.
@@ -265,17 +456,17 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```json
 {
   "mcpServers": {
-    "paper-search-mcp": {
+    "paper-toolkit-mcp": {
       "command": "uvx",
-      "args": ["paper-search-mcp"],
+      "args": ["paper-toolkit-mcp"],
       "env": {
-        "PAPER_SEARCH_MCP_UNPAYWALL_EMAIL": "your@email.com",
-        "PAPER_SEARCH_MCP_CORE_API_KEY": "",
-        "PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY": "",
-        "PAPER_SEARCH_MCP_ZENODO_ACCESS_TOKEN": "",
-        "PAPER_SEARCH_MCP_GOOGLE_SCHOLAR_PROXY_URL": "",
-        "PAPER_SEARCH_MCP_IEEE_API_KEY": "",
-        "PAPER_SEARCH_MCP_ACM_API_KEY": ""
+        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
+        "paper_toolkit_mcp_CORE_API_KEY": "",
+        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": "",
+        "paper_toolkit_mcp_ZENODO_ACCESS_TOKEN": "",
+        "paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL": "",
+        "paper_toolkit_mcp_IEEE_API_KEY": "",
+        "paper_toolkit_mcp_ACM_API_KEY": ""
       }
     }
   }
@@ -287,7 +478,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### Method 3 — `uv` (persistent install)
 
 ```bash
-uv tool install paper-search-mcp
+uv tool install paper-toolkit-mcp
 ```
 
 **Claude Desktop config:**
@@ -295,17 +486,17 @@ uv tool install paper-search-mcp
 ```json
 {
   "mcpServers": {
-    "paper-search-mcp": {
+    "paper-toolkit-mcp": {
       "command": "uv",
-      "args": ["tool", "run", "paper-search-mcp"],
+      "args": ["tool", "run", "paper-toolkit-mcp"],
       "env": {
-        "PAPER_SEARCH_MCP_UNPAYWALL_EMAIL": "your@email.com",
-        "PAPER_SEARCH_MCP_CORE_API_KEY": "",
-        "PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY": "",
-        "PAPER_SEARCH_MCP_ZENODO_ACCESS_TOKEN": "",
-        "PAPER_SEARCH_MCP_GOOGLE_SCHOLAR_PROXY_URL": "",
-        "PAPER_SEARCH_MCP_IEEE_API_KEY": "",
-        "PAPER_SEARCH_MCP_ACM_API_KEY": ""
+        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
+        "paper_toolkit_mcp_CORE_API_KEY": "",
+        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": "",
+        "paper_toolkit_mcp_ZENODO_ACCESS_TOKEN": "",
+        "paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL": "",
+        "paper_toolkit_mcp_IEEE_API_KEY": "",
+        "paper_toolkit_mcp_ACM_API_KEY": ""
       }
     }
   }
@@ -317,7 +508,7 @@ uv tool install paper-search-mcp
 ### Method 4 — `pip` (standard Python install)
 
 ```bash
-pip install paper-search-mcp
+pip install paper-toolkit-mcp
 ```
 
 **Claude Desktop config:**
@@ -325,17 +516,17 @@ pip install paper-search-mcp
 ```json
 {
   "mcpServers": {
-    "paper-search-mcp": {
+    "paper-toolkit-mcp": {
       "command": "python",
-      "args": ["-m", "paper_search_mcp.server"],
+      "args": ["-m", "paper_toolkit_mcp.server"],
       "env": {
-        "PAPER_SEARCH_MCP_UNPAYWALL_EMAIL": "your@email.com",
-        "PAPER_SEARCH_MCP_CORE_API_KEY": "",
-        "PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY": "",
-        "PAPER_SEARCH_MCP_ZENODO_ACCESS_TOKEN": "",
-        "PAPER_SEARCH_MCP_GOOGLE_SCHOLAR_PROXY_URL": "",
-        "PAPER_SEARCH_MCP_IEEE_API_KEY": "",
-        "PAPER_SEARCH_MCP_ACM_API_KEY": ""
+        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
+        "paper_toolkit_mcp_CORE_API_KEY": "",
+        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": "",
+        "paper_toolkit_mcp_ZENODO_ACCESS_TOKEN": "",
+        "paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL": "",
+        "paper_toolkit_mcp_IEEE_API_KEY": "",
+        "paper_toolkit_mcp_ACM_API_KEY": ""
       }
     }
   }
@@ -349,7 +540,7 @@ pip install paper-search-mcp
 ### Method 5 — `npx` (via Smithery CLI, no local Python needed)
 
 ```bash
-npx -y @smithery/cli run @openags/paper-search-mcp
+npx -y @smithery/cli run @openags/paper-toolkit-mcp
 ```
 
 **Claude Desktop config:**
@@ -357,13 +548,13 @@ npx -y @smithery/cli run @openags/paper-search-mcp
 ```json
 {
   "mcpServers": {
-    "paper-search-mcp": {
+    "paper-toolkit-mcp": {
       "command": "npx",
-      "args": ["-y", "@smithery/cli", "run", "@openags/paper-search-mcp"],
+      "args": ["-y", "@smithery/cli", "run", "@openags/paper-toolkit-mcp"],
       "env": {
-        "PAPER_SEARCH_MCP_UNPAYWALL_EMAIL": "your@email.com",
-        "PAPER_SEARCH_MCP_CORE_API_KEY": "",
-        "PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY": ""
+        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
+        "paper_toolkit_mcp_CORE_API_KEY": "",
+        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": ""
       }
     }
   }
@@ -375,11 +566,11 @@ npx -y @smithery/cli run @openags/paper-search-mcp
 ### Method 6 — Docker
 
 ```bash
-docker build -t paper-search-mcp .
+docker build -t paper-toolkit-mcp .
 docker run --rm -i \
-  -e PAPER_SEARCH_MCP_UNPAYWALL_EMAIL=your@email.com \
-  -e PAPER_SEARCH_MCP_CORE_API_KEY=your_core_key \
-  paper-search-mcp
+  -e paper_toolkit_mcp_UNPAYWALL_EMAIL=your@email.com \
+  -e paper_toolkit_mcp_CORE_API_KEY=your_core_key \
+  paper-toolkit-mcp
 ```
 
 **Claude Desktop config:**
@@ -387,17 +578,17 @@ docker run --rm -i \
 ```json
 {
   "mcpServers": {
-    "paper-search-mcp": {
+    "paper-toolkit-mcp": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "paper-search-mcp"],
+      "args": ["run", "--rm", "-i", "paper-toolkit-mcp"],
       "env": {
-        "PAPER_SEARCH_MCP_UNPAYWALL_EMAIL": "your@email.com",
-        "PAPER_SEARCH_MCP_CORE_API_KEY": "",
-        "PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY": "",
-        "PAPER_SEARCH_MCP_ZENODO_ACCESS_TOKEN": "",
-        "PAPER_SEARCH_MCP_GOOGLE_SCHOLAR_PROXY_URL": "",
-        "PAPER_SEARCH_MCP_IEEE_API_KEY": "",
-        "PAPER_SEARCH_MCP_ACM_API_KEY": ""
+        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
+        "paper_toolkit_mcp_CORE_API_KEY": "",
+        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": "",
+        "paper_toolkit_mcp_ZENODO_ACCESS_TOKEN": "",
+        "paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL": "",
+        "paper_toolkit_mcp_IEEE_API_KEY": "",
+        "paper_toolkit_mcp_ACM_API_KEY": ""
       }
     }
   }
@@ -415,11 +606,11 @@ This is the most reliable method on macOS — no wrapper scripts, no `realpath` 
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 2. Clone repo
-git clone https://github.com/openags/paper-search-mcp.git
-cd paper-search-mcp
+git clone https://github.com/openags/paper-toolkit-mcp.git
+cd paper-toolkit-mcp
 
 # 3. Verify it runs (uv auto-resolves dependencies, no manual install needed)
-uv run -m paper_search_mcp.server
+uv run -m paper_toolkit_mcp.server
 ```
 
 **Claude Desktop config** (replace the directory path with your actual clone location):
@@ -427,31 +618,31 @@ uv run -m paper_search_mcp.server
 ```json
 {
   "mcpServers": {
-    "paper-search-mcp": {
+    "paper-toolkit-mcp": {
       "command": "uv",
       "args": [
         "run",
-        "--directory", "/path/to/paper-search-mcp",
-        "-m", "paper_search_mcp.server"
+        "--directory", "/path/to/paper-toolkit-mcp",
+        "-m", "paper_toolkit_mcp.server"
       ],
       "env": {
-        "PAPER_SEARCH_MCP_UNPAYWALL_EMAIL": "your@email.com",
-        "PAPER_SEARCH_MCP_CORE_API_KEY": "",
-        "PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY": "",
-        "PAPER_SEARCH_MCP_ZENODO_ACCESS_TOKEN": "",
-        "PAPER_SEARCH_MCP_GOOGLE_SCHOLAR_PROXY_URL": "",
-        "PAPER_SEARCH_MCP_IEEE_API_KEY": "",
-        "PAPER_SEARCH_MCP_ACM_API_KEY": ""
+        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
+        "paper_toolkit_mcp_CORE_API_KEY": "",
+        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": "",
+        "paper_toolkit_mcp_ZENODO_ACCESS_TOKEN": "",
+        "paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL": "",
+        "paper_toolkit_mcp_IEEE_API_KEY": "",
+        "paper_toolkit_mcp_ACM_API_KEY": ""
       }
     }
   }
 }
 ```
 
-For example, if you cloned to `/Users/mac/Pengsong/paper-search-mcp`:
+For example, if you cloned to `/Users/mac/Pengsong/paper-toolkit-mcp`:
 
 ```json
-"args": ["run", "--directory", "/Users/mac/Pengsong/paper-search-mcp", "-m", "paper_search_mcp.server"]
+"args": ["run", "--directory", "/Users/mac/Pengsong/paper-toolkit-mcp", "-m", "paper_toolkit_mcp.server"]
 ```
 
 > `uv run` automatically installs dependencies into an isolated environment on first run — no `pip install` or `venv` needed.
@@ -471,22 +662,22 @@ Instead of putting keys directly in the JSON config you can store them in a `.en
 
 ```bash
 cp .env.example .env   # if running from source
-# or create ~/.paper-search-mcp.env for global use
+# or create ~/.paper-toolkit-mcp.env for global use
 ```
 
 ```dotenv
-PAPER_SEARCH_MCP_UNPAYWALL_EMAIL=your@email.com
-PAPER_SEARCH_MCP_CORE_API_KEY=
-PAPER_SEARCH_MCP_SEMANTIC_SCHOLAR_API_KEY=
-PAPER_SEARCH_MCP_ZENODO_ACCESS_TOKEN=
-PAPER_SEARCH_MCP_GOOGLE_SCHOLAR_PROXY_URL=
-PAPER_SEARCH_MCP_IEEE_API_KEY=
-PAPER_SEARCH_MCP_ACM_API_KEY=
+paper_toolkit_mcp_UNPAYWALL_EMAIL=your@email.com
+paper_toolkit_mcp_CORE_API_KEY=
+paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY=
+paper_toolkit_mcp_ZENODO_ACCESS_TOKEN=
+paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL=
+paper_toolkit_mcp_IEEE_API_KEY=
+paper_toolkit_mcp_ACM_API_KEY=
 ```
 
-To use a custom path: `export PAPER_SEARCH_MCP_ENV_FILE=/absolute/path/to/.env`
+To use a custom path: `export paper_toolkit_mcp_ENV_FILE=/absolute/path/to/.env`
 
-> Legacy variable names without the `PAPER_SEARCH_MCP_` prefix (e.g. `CORE_API_KEY`, `UNPAYWALL_EMAIL`) are still supported for backward compatibility.
+> Legacy variable names without the `paper_toolkit_mcp_` prefix (e.g. `CORE_API_KEY`, `UNPAYWALL_EMAIL`) are still supported for backward compatibility.
 
 ---
 
@@ -500,8 +691,8 @@ We welcome contributions! Here's how to get started:
 2. **Clone and Set Up**:
 
    ```bash
-   git clone https://github.com/yourusername/paper-search-mcp.git
-   cd paper-search-mcp
+   git clone https://github.com/yourusername/paper-toolkit-mcp.git
+   cd paper-toolkit-mcp
    uv venv && source .venv/bin/activate
    uv pip install -e ".[dev]"
    ```
@@ -576,7 +767,7 @@ We welcome contributions! Here's how to get started:
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=openags/paper-search-mcp&type=Date)](https://star-history.com/#openags/paper-search-mcp&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=openags/paper-toolkit-mcp&type=Date)](https://star-history.com/#openags/paper-toolkit-mcp&Date)
 
 ---
 
@@ -586,4 +777,4 @@ This project is licensed under the MIT License. See the LICENSE file for details
 
 ---
 
-Happy researching with `paper-search-mcp`! If you encounter issues, open a GitHub issue.
+Happy researching with `paper-toolkit-mcp`! If you encounter issues, open a GitHub issue.

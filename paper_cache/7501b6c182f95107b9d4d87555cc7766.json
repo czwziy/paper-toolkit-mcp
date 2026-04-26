@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-04-26T11:19:19.431324",
+  "query": "test query",
+  "source": "arxiv",
+  "params": {},
+  "paper_count": 1,
+  "papers": [
+    {
+      "title": "Test Paper",
+      "paper_id": "1",
+      "authors": [
+        "Author"
+      ]
+    }
+  ]
+}

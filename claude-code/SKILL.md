@@ -1,24 +1,24 @@
 ---
-name: paper-search
+name: paper-toolkit
 description: Search, download, and read academic papers from 20+ sources (arXiv, PubMed, Semantic Scholar, CrossRef, etc). Use when the user asks to find papers, search for research, look up academic literature, download a paper PDF, or extract text from a paper.
 ---
 
 # Paper Search
 
-Search, download, and read academic papers via the `paper-search` CLI.
+Search, download, and read academic papers via the `paper-toolkit` CLI.
 
 ## CLI Usage
 
 All commands run via:
 ```bash
-uv run --directory <REPO_PATH> paper-search <command> [args]
+uv run --directory <REPO_PATH> paper-toolkit <command> [args]
 ```
 
 Replace `<REPO_PATH>` with the absolute path to your clone of this repository.
 
 ### Search
 ```bash
-uv run --directory <REPO_PATH> paper-search search "<query>" -n <max_per_source> -s <sources> -y <year>
+uv run --directory <REPO_PATH> paper-toolkit search "<query>" -n <max_per_source> -s <sources> -y <year>
 ```
 - `-n`: results per source (default: 5)
 - `-s`: comma-separated sources or "all" (default: all)
@@ -28,17 +28,17 @@ For speed, prefer targeted sources (`-s arxiv,semantic,crossref`) over "all" unl
 
 ### Download PDF
 ```bash
-uv run --directory <REPO_PATH> paper-search download <source> <paper_id> [-o ./downloads]
+uv run --directory <REPO_PATH> paper-toolkit download <source> <paper_id> [-o ./downloads]
 ```
 
 ### Read (extract text)
 ```bash
-uv run --directory <REPO_PATH> paper-search read <source> <paper_id> [-o ./downloads]
+uv run --directory <REPO_PATH> paper-toolkit read <source> <paper_id> [-o ./downloads]
 ```
 
 ### List sources
 ```bash
-uv run --directory <REPO_PATH> paper-search sources
+uv run --directory <REPO_PATH> paper-toolkit sources
 ```
 
 ## Output

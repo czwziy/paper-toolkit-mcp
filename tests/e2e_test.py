@@ -7,7 +7,7 @@ import os
 import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from paper_search_mcp.config import get_env
+from paper_toolkit_mcp.config import get_env
 
 SAVE_PATH = "/tmp/paper_e2e_test"
 os.makedirs(SAVE_PATH, exist_ok=True)
@@ -67,7 +67,7 @@ print(SEP)
 
 # ── 1. arXiv ─────────────────────────────────────────────────────────────────
 print("\n[1] arXiv")
-from paper_search_mcp.academic_platforms.arxiv import ArxivSearcher
+from paper_toolkit_mcp.academic_platforms.arxiv import ArxivSearcher
 s = ArxivSearcher()
 ok_s, paper = check_search("arxiv", s.search("attention mechanism", max_results=2), optional=True)
 ok_d = ok_r = (None if ok_s is None else False)
@@ -79,7 +79,7 @@ results["arxiv"] = (ok_s, ok_d, ok_r)
 
 # ── 2. PubMed ─────────────────────────────────────────────────────────────────
 print("\n[2] PubMed  (download not supported)")
-from paper_search_mcp.academic_platforms.pubmed import PubMedSearcher
+from paper_toolkit_mcp.academic_platforms.pubmed import PubMedSearcher
 s = PubMedSearcher()
 ok_s, paper = check_search("pubmed", s.search("transformer neural network", max_results=2))
 ok_d = False
@@ -101,7 +101,7 @@ results["pubmed"] = (ok_s, ok_d, ok_r)
 
 # ── 3. bioRxiv ────────────────────────────────────────────────────────────────
 print("\n[3] bioRxiv  (search by category; download may be slow)")
-from paper_search_mcp.academic_platforms.biorxiv import BioRxivSearcher
+from paper_toolkit_mcp.academic_platforms.biorxiv import BioRxivSearcher
 s = BioRxivSearcher()
 ok_s, paper = check_search("biorxiv", s.search("bioinformatics", max_results=2, days=30), optional=True)
 ok_d = ok_r = (None if ok_s is None else False)
@@ -113,7 +113,7 @@ results["biorxiv"] = (ok_s, ok_d, ok_r)
 
 # ── 4. medRxiv ────────────────────────────────────────────────────────────────
 print("\n[4] medRxiv  (search by category; download may be slow)")
-from paper_search_mcp.academic_platforms.medrxiv import MedRxivSearcher
+from paper_toolkit_mcp.academic_platforms.medrxiv import MedRxivSearcher
 s = MedRxivSearcher()
 ok_s, paper = check_search("medrxiv", s.search("infectious_diseases", max_results=2, days=30), optional=True)
 ok_d = ok_r = (None if ok_s is None else False)
@@ -125,7 +125,7 @@ results["medrxiv"] = (ok_s, ok_d, ok_r)
 
 # ── 5. Google Scholar ─────────────────────────────────────────────────────────
 print("\n[5] Google Scholar  (download not supported)")
-from paper_search_mcp.academic_platforms.google_scholar import GoogleScholarSearcher
+from paper_toolkit_mcp.academic_platforms.google_scholar import GoogleScholarSearcher
 s = GoogleScholarSearcher()
 ok_s, paper = check_search("google_scholar", s.search("deep learning survey", max_results=2), optional=True)
 ok_d = None if ok_s is None else False
@@ -142,7 +142,7 @@ results["google_scholar"] = (ok_s, ok_d, ok_r)
 
 # ── 6. IACR ───────────────────────────────────────────────────────────────────
 print("\n[6] IACR  (fetch_details=False for speed; download uses paper_id)")
-from paper_search_mcp.academic_platforms.iacr import IACRSearcher
+from paper_toolkit_mcp.academic_platforms.iacr import IACRSearcher
 s = IACRSearcher()
 ok_s, paper = check_search("iacr", s.search("zero knowledge proof", max_results=2, fetch_details=False))
 ok_d = ok_r = False
@@ -154,7 +154,7 @@ results["iacr"] = (ok_s, ok_d, ok_r)
 
 # ── 7. Semantic Scholar ───────────────────────────────────────────────────────
 print("\n[7] Semantic Scholar  (download requires openAccessPdf)")
-from paper_search_mcp.academic_platforms.semantic import SemanticSearcher
+from paper_toolkit_mcp.academic_platforms.semantic import SemanticSearcher
 s = SemanticSearcher()
 papers = s.search("BERT language model", max_results=5)
 ok_s, paper = check_search("semantic", papers, optional=True)
@@ -174,7 +174,7 @@ results["semantic"] = (ok_s, ok_d, ok_r)
 
 # ── 8. CrossRef ───────────────────────────────────────────────────────────────
 print("\n[8] CrossRef  (download not supported)")
-from paper_search_mcp.academic_platforms.crossref import CrossRefSearcher
+from paper_toolkit_mcp.academic_platforms.crossref import CrossRefSearcher
 s = CrossRefSearcher()
 ok_s, paper = check_search("crossref", s.search("graph neural network", max_results=2))
 ok_d = ok_r = False
@@ -193,7 +193,7 @@ results["crossref"] = (ok_s, ok_d, ok_r)
 
 # ── 9. OpenAlex ───────────────────────────────────────────────────────────────
 print("\n[9] OpenAlex  (download not supported natively)")
-from paper_search_mcp.academic_platforms.openalex import OpenAlexSearcher
+from paper_toolkit_mcp.academic_platforms.openalex import OpenAlexSearcher
 s = OpenAlexSearcher()
 ok_s, paper = check_search("openalex", s.search("vision transformers", max_results=2))
 ok_d = ok_r = False
@@ -212,7 +212,7 @@ results["openalex"] = (ok_s, ok_d, ok_r)
 
 # ── 10. PubMed Central (PMC) ───────────────────────────────────────────────────────────────
 print("\n[10] PubMed Central (PMC)  (open access PDF download)")
-from paper_search_mcp.academic_platforms.pmc import PMCSearcher
+from paper_toolkit_mcp.academic_platforms.pmc import PMCSearcher
 s = PMCSearcher()
 papers = s.search("cancer immunotherapy", max_results=5)
 ok_s, paper = check_search("pmc", papers, optional=True)
@@ -232,7 +232,7 @@ results["pmc"] = (ok_s, ok_d, ok_r)
 
 # ── 11. CORE ───────────────────────────────────────────────────────────────────────────────
 print("\n[11] CORE  (requires API key for full functionality)")
-from paper_search_mcp.academic_platforms.core import CORESearcher
+from paper_toolkit_mcp.academic_platforms.core import CORESearcher
 s = CORESearcher()
 papers = s.search("machine learning", max_results=5)
 ok_s, paper = check_search("core", papers, optional=True)
@@ -256,7 +256,7 @@ results["core"] = (ok_s, ok_d, ok_r)
 
 # ── 12. Europe PMC ─────────────────────────────────────────────────────────────────────────
 print("\n[12] Europe PMC  (biomedical literature)")
-from paper_search_mcp.academic_platforms.europepmc import EuropePMCSearcher
+from paper_toolkit_mcp.academic_platforms.europepmc import EuropePMCSearcher
 s = EuropePMCSearcher()
 papers = s.search("genomics", max_results=5)
 ok_s, paper = check_search("europepmc", papers)
@@ -276,7 +276,7 @@ results["europepmc"] = (ok_s, ok_d, ok_r)
 
 # ── 13. dblp ─────────────────────────────────────────────────────────────────
 print("\n[13] dblp  (metadata source; download not supported)")
-from paper_search_mcp.academic_platforms.dblp import DBLPSearcher
+from paper_toolkit_mcp.academic_platforms.dblp import DBLPSearcher
 s = DBLPSearcher()
 ok_s, paper = check_search("dblp", s.search("machine learning", max_results=2), optional=True)
 ok_d = ok_r = (None if ok_s is None else False)
@@ -297,7 +297,7 @@ results["dblp"] = (ok_s, ok_d, ok_r)
 
 # ── 14. OpenAIRE ─────────────────────────────────────────────────────────────
 print("\n[14] OpenAIRE  (search only; direct download/read not supported)")
-from paper_search_mcp.academic_platforms.openaire import OpenAiresearcher
+from paper_toolkit_mcp.academic_platforms.openaire import OpenAiresearcher
 s = OpenAiresearcher()
 ok_s, paper = check_search("openaire", s.search("climate change", max_results=2))
 ok_d = ok_r = False
@@ -319,7 +319,7 @@ results["openaire"] = (ok_s, ok_d, ok_r)
 
 # ── 15. CiteSeerX ────────────────────────────────────────────────────────────
 print("\n[15] CiteSeerX  (download depends on source PDF availability)")
-from paper_search_mcp.academic_platforms.citeseerx import CiteSeerXSearcher
+from paper_toolkit_mcp.academic_platforms.citeseerx import CiteSeerXSearcher
 s = CiteSeerXSearcher()
 ok_s, paper = check_search("citeseerx", s.search("machine learning", max_results=2), optional=True)
 ok_d = ok_r = (None if ok_s is None else False)
@@ -338,7 +338,7 @@ results["citeseerx"] = (ok_s, ok_d, ok_r)
 
 # ── 16. DOAJ ─────────────────────────────────────────────────────────────────
 print("\n[16] DOAJ  (open access journal articles)")
-from paper_search_mcp.academic_platforms.doaj import DOAJSearcher
+from paper_toolkit_mcp.academic_platforms.doaj import DOAJSearcher
 s = DOAJSearcher()
 papers = s.search("machine learning", max_results=5)
 ok_s, paper = check_search("doaj", papers, optional=True)
@@ -360,7 +360,7 @@ results["doaj"] = (ok_s, ok_d, ok_r)
 
 # ── 17. BASE ─────────────────────────────────────────────────────────────────
 print("\n[17] BASE  (OAI-PMH metadata, PDF availability varies)")
-from paper_search_mcp.academic_platforms.base_search import BASESearcher
+from paper_toolkit_mcp.academic_platforms.base_search import BASESearcher
 s = BASESearcher()
 ok_s, paper = check_search("base", s.search("machine learning", max_results=2), optional=True)
 ok_d = ok_r = (None if ok_s is None else False)
@@ -376,7 +376,7 @@ results["base"] = (ok_s, ok_d, ok_r)
 
 # ── 18. Zenodo ───────────────────────────────────────────────────────────────
 print("\n[18] Zenodo  (open repository, PDF availability varies)")
-from paper_search_mcp.academic_platforms.zenodo import ZenodoSearcher
+from paper_toolkit_mcp.academic_platforms.zenodo import ZenodoSearcher
 s = ZenodoSearcher()
 ok_s, paper = check_search("zenodo", s.search("machine learning", max_results=2), optional=True)
 ok_d = ok_r = (None if ok_s is None else False)
@@ -392,7 +392,7 @@ results["zenodo"] = (ok_s, ok_d, ok_r)
 
 # ── 19. HAL ──────────────────────────────────────────────────────────────────
 print("\n[19] HAL  (open archive, PDF availability varies)")
-from paper_search_mcp.academic_platforms.hal import HALSearcher
+from paper_toolkit_mcp.academic_platforms.hal import HALSearcher
 s = HALSearcher()
 ok_s, paper = check_search("hal", s.search("machine learning", max_results=2), optional=True)
 ok_d = ok_r = (None if ok_s is None else False)
@@ -412,7 +412,7 @@ results["hal"] = (ok_s, ok_d, ok_r)
 
 # ── 20. SSRN ─────────────────────────────────────────────────────────────────
 print("\n[20] SSRN  (best-effort download/read; often login-dependent)")
-from paper_search_mcp.academic_platforms.ssrn import SSRNSearcher
+from paper_toolkit_mcp.academic_platforms.ssrn import SSRNSearcher
 s = SSRNSearcher()
 ok_s, paper = check_search("ssrn", s.search("machine learning", max_results=2), optional=True)
 ok_d = ok_r = (None if ok_s is None else False)
@@ -436,7 +436,7 @@ results["ssrn"] = (ok_s, ok_d, ok_r)
 
 # ── 21. Unpaywall ────────────────────────────────────────────────────────────
 print("\n[21] Unpaywall  (DOI metadata and OA links; no direct download/read)")
-from paper_search_mcp.academic_platforms.unpaywall import UnpaywallSearcher
+from paper_toolkit_mcp.academic_platforms.unpaywall import UnpaywallSearcher
 s = UnpaywallSearcher()
 ok_s, paper = check_search("unpaywall", s.search("10.1038/nature12373", max_results=1), optional=True)
 ok_d = ok_r = (None if ok_s is None else False)

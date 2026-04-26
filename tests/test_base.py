@@ -1,8 +1,8 @@
 import unittest
 import requests
 
-from paper_search_mcp.academic_platforms.base_search import BASESearcher
-from paper_search_mcp.paper import Paper
+from paper_toolkit_mcp.academic_platforms.base_search import BASESearcher
+from paper_toolkit_mcp.paper import Paper
 
 
 def check_api_accessible() -> bool:

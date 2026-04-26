@@ -3,7 +3,7 @@ import unittest
 import os
 import requests
 import urllib3
-from paper_search_mcp.academic_platforms.openaire import OpenAiresearcher
+from paper_toolkit_mcp.academic_platforms.openaire import OpenAiresearcher
 
 
 def check_api_accessible():

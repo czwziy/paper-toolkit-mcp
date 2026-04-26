@@ -1,7 +1,7 @@
 import unittest
 import os
 import requests
-from paper_search_mcp.academic_platforms.biorxiv import BioRxivSearcher
+from paper_toolkit_mcp.academic_platforms.biorxiv import BioRxivSearcher
 
 def check_api_accessible():
     """检查 bioRxiv API 是否可访问"""

@@ -931,7 +931,7 @@ wheels = [
 ]
 
 [[package]]
-name = "paper-search-mcp"
+name = "paper-toolkit-mcp"
 version = "0.1.4"
 source = { editable = "." }
 dependencies = [

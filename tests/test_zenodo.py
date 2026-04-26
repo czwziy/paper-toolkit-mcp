@@ -1,7 +1,7 @@
 import unittest
 import requests
 
-from paper_search_mcp.academic_platforms.zenodo import ZenodoSearcher
+from paper_toolkit_mcp.academic_platforms.zenodo import ZenodoSearcher
 
 
 def check_api_accessible() -> bool:

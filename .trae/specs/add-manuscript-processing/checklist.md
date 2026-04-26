@@ -1,0 +1,24 @@
+# Checklist
+
+- [ ] cache.py 模块实现了 JSON 格式的缓存读写、TTL 检查和清理功能
+- [ ] reference.py 模块能正确解析 [@doi:...]、[@pmid:...]、[@arxiv:...]、[@title:...] 占位符
+- [ ] reference.py 能生成正确的 BibTeX 格式（包含 title、author、year、doi 等字段）
+- [ ] reference.py 能生成正确的 RIS 格式（可导入 Zotero）
+- [ ] reference.py 能生成 GB/T 7714-2015 格式的参考文献列表（期刊、会议论文格式正确）
+- [ ] reference.py 能生成 APA 7th Edition 格式的参考文献列表
+- [ ] reference.py 能生成 IEEE 格式的参考文献列表
+- [ ] csl/ 目录包含所有必需的 CSL 文件（gb7714, apa, ieee, vancouver, harvard）
+- [ ] pandoc_helper.py 能检测 pandoc 是否可用
+- [ ] pandoc_helper.py 能将 Markdown + BibTeX 转换为 Word 文档
+- [ ] chinese-gb7714-2015-numeric.csl 文件已保存到 csl/ 目录
+- [ ] base.py 的 PaperSource 基类集成了缓存逻辑
+- [ ] server.py 新增了 process_manuscript MCP 工具
+- [ ] server.py 新增了 get_paper_metadata MCP 工具
+- [ ] server.py 新增了 export_references MCP 工具
+- [ ] cli.py 新增了 manuscript 命令
+- [ ] cli.py 新增了 cache list/clear 命令
+- [ ] 所有新增工具在 MCP 中注册且可通过 MCP 客户端调用
+- [ ] 向后兼容性：现有搜索/下载/读取工具仍能正常工作
+- [ ] process_manuscript 输出处理报告，包含成功/失败统计
+- [ ] 处理报告中列出所有无法识别的文献及失败原因
+- [ ] 处理失败的占位符在输出的 Markdown 中保留原文

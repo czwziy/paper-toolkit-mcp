@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from paper_search_mcp.academic_platforms.ssrn import SSRNSearcher
+from paper_toolkit_mcp.academic_platforms.ssrn import SSRNSearcher
 
 
 class TestSSRNSearcher(unittest.TestCase):

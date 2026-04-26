@@ -1,5 +1,5 @@
 import unittest
-from paper_search_mcp.academic_platforms.pubmed import PubMedSearcher
+from paper_toolkit_mcp.academic_platforms.pubmed import PubMedSearcher
 
 class TestPubMedSearcher(unittest.TestCase):
     def test_search(self):

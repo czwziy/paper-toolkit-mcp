@@ -1,7 +1,7 @@
 import unittest
 import requests
 
-from paper_search_mcp.academic_platforms.hal import HALSearcher
+from paper_toolkit_mcp.academic_platforms.hal import HALSearcher
 
 
 def check_api_accessible() -> bool:

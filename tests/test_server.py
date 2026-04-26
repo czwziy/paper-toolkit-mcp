@@ -2,7 +2,7 @@
 import unittest
 import asyncio
 import os
-from paper_search_mcp import server
+from paper_toolkit_mcp import server
 
 class TestPaperSearchServer(unittest.TestCase):
     def test_all_sources_include_new_platforms(self):

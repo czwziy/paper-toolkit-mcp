@@ -1,6 +1,6 @@
 # tests/test_arxiv.py
 import unittest
-from paper_search_mcp.academic_platforms.arxiv import ArxivSearcher
+from paper_toolkit_mcp.academic_platforms.arxiv import ArxivSearcher
 
 class TestArxivSearcher(unittest.TestCase):
     def test_search(self):

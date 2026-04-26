@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock
 from datetime import datetime
 
-from paper_search_mcp.academic_platforms.unpaywall import UnpaywallResolver
+from paper_toolkit_mcp.academic_platforms.unpaywall import UnpaywallResolver
 
 
 class TestUnpaywallResolver(unittest.TestCase):

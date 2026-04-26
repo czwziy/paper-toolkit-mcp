@@ -1,7 +1,7 @@
 import unittest
 import os
 import requests
-from paper_search_mcp.academic_platforms.medrxiv import MedRxivSearcher
+from paper_toolkit_mcp.academic_platforms.medrxiv import MedRxivSearcher
 
 def check_api_accessible():
     """检查 medRxiv API 是否可访问"""

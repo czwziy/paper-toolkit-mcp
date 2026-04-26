@@ -2,7 +2,7 @@
 import unittest
 import os
 import requests
-from paper_search_mcp.academic_platforms.crossref import CrossRefSearcher
+from paper_toolkit_mcp.academic_platforms.crossref import CrossRefSearcher
 
 def check_api_accessible():
     """检查 CrossRef API 是否可访问
@@ -98,7 +98,7 @@ class TestCrossRefSearcher(unittest.TestCase):
 
     def test_user_agent_header(self):
         # Test that the session has the correct user agent
-        self.assertIn("paper-search-mcp", self.searcher.session.headers.get('User-Agent', ''))
+        self.assertIn("paper-toolkit-mcp", self.searcher.session.headers.get('User-Agent', ''))
         self.assertIn("mailto:", self.searcher.session.headers.get('User-Agent', ''))
 
 if __name__ == '__main__':

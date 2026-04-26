@@ -2,7 +2,7 @@ import unittest
 import requests
 from unittest.mock import Mock, patch
 
-from paper_search_mcp.academic_platforms.citeseerx import CiteSeerXSearcher
+from paper_toolkit_mcp.academic_platforms.citeseerx import CiteSeerXSearcher
 
 
 def check_api_accessible() -> bool:

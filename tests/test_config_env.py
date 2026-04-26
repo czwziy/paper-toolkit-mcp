@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from paper_search_mcp import config
+from paper_toolkit_mcp import config
 
 
 class TestConfigEnv(unittest.TestCase):
@@ -11,8 +11,8 @@ class TestConfigEnv(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "PAPER_SEARCH_MCP_ENV_FILE": "/tmp/paper-search-mcp-missing.env",
-                "PAPER_SEARCH_MCP_CORE_API_KEY": "prefixed-value",
+                "paper_toolkit_mcp_ENV_FILE": "/tmp/paper-toolkit-mcp-missing.env",
+                "paper_toolkit_mcp_CORE_API_KEY": "prefixed-value",
                 "CORE_API_KEY": "legacy-value",
             },
             clear=True,
@@ -23,7 +23,7 @@ class TestConfigEnv(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "PAPER_SEARCH_MCP_ENV_FILE": "/tmp/paper-search-mcp-missing.env",
+                "paper_toolkit_mcp_ENV_FILE": "/tmp/paper-toolkit-mcp-missing.env",
                 "CORE_API_KEY": "legacy-value",
             },
             clear=True,
@@ -34,8 +34,8 @@ class TestConfigEnv(unittest.TestCase):
         with patch.dict(
             os.environ,
             {
-                "PAPER_SEARCH_MCP_ENV_FILE": "/tmp/paper-search-mcp-missing.env",
-                "PAPER_SEARCH_MCP_CORE_API_KEY": "",
+                "paper_toolkit_mcp_ENV_FILE": "/tmp/paper-toolkit-mcp-missing.env",
+                "paper_toolkit_mcp_CORE_API_KEY": "",
                 "CORE_API_KEY": "legacy-value",
             },
             clear=True,
@@ -44,13 +44,13 @@ class TestConfigEnv(unittest.TestCase):
 
     def test_loads_from_custom_env_file(self):
         with tempfile.NamedTemporaryFile("w", suffix=".env", delete=True) as tmp:
-            tmp.write("PAPER_SEARCH_MCP_UNPAYWALL_EMAIL=test@example.com\n")
+            tmp.write("paper_toolkit_mcp_UNPAYWALL_EMAIL=test@example.com\n")
             tmp.flush()
 
             with patch.dict(
                 os.environ,
                 {
-                    "PAPER_SEARCH_MCP_ENV_FILE": tmp.name,
+                    "paper_toolkit_mcp_ENV_FILE": tmp.name,
                 },
                 clear=True,
             ):
