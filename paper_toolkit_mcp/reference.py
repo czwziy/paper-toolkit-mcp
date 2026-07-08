@@ -684,7 +684,7 @@ def _get_paper_by_pmid(pmid: str, cache=None) -> dict | None:
         fetch_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={pmid}&retmode=xml"
         resp = requests.get(fetch_url, timeout=10)
         if resp.status_code == 200 and "<PubmedArticle>" in resp.text:
-            from xml.etree.ElementTree import Element  # nosec B405 - constructing placeholder, not parsing
+            from xml.etree.ElementTree import Element  # nosec B405 - 仅构造占位节点，非解析
 
             from defusedxml import ElementTree as ET
             root = ET.fromstring(resp.text)
@@ -745,7 +745,7 @@ def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict | None:
         url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200 and "<entry>" in resp.text:
-            from xml.etree.ElementTree import Element  # nosec B405 - constructing placeholder, not parsing
+            from xml.etree.ElementTree import Element  # nosec B405 - 仅构造占位节点，非解析
 
             from defusedxml import ElementTree as ET
             root = ET.fromstring(resp.xml if hasattr(resp, 'xml') else resp.text)

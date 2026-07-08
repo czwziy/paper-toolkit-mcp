@@ -56,7 +56,9 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Pytest (unit only — hermetic, no network)
-        run: pytest --cov=paper_toolkit_mcp --cov-report=term-missing
+        # coverage 参数由 pyproject.toml addopts 统一提供（含 --cov-fail-under），
+        # 本地与 CI 行为一致，避免门禁只在 CI 生效的盲区（harness 4.6 双重保障）。
+        run: pytest
 
   security-and-guards:
     name: Security + File size + Doc freshness

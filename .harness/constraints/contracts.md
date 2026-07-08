@@ -16,7 +16,7 @@
 | 函数返回值类型一致 | mypy `warn_return_any` | `pyproject.toml [tool.mypy]` | mypy 报错 |
 | 隐式 Optional 禁用 | mypy `no_implicit_optional` | 同上 | mypy 报错 |
 | 单元测试必须离线 hermetic | pytest `testpaths=["tests/unit"]` | `pyproject.toml [tool.pytest]` | CI 不收集 integration 测试 |
-| 覆盖率 ≥ 50% | coverage `fail_under=50` | `pyproject.toml [tool.coverage.report]` | pytest --cov 退出码非 0 |
+| 覆盖率 ≥ 当前门禁值（20%，目标 50%） | coverage `fail_under` + pytest `--cov-fail-under` | `pyproject.toml [tool.coverage.report]` 与 `[tool.pytest.ini_options] addopts` | pytest 退出码非 0 |
 | 安全扫描（无硬编码密钥/弱密码） | bandit | `.harness/constraints/security/bandit.yaml` | bandit 退出码非 0 |
 | 文件 ≤ 400 行 | CI 脚本 `find + wc + awk` | `.github/workflows/ci.yml` | CI job 失败 |
 | 设计文档不腐化（≤60 天） | CI git log 检查 | `.github/workflows/ci.yml` | CI warning（不阻断） |
