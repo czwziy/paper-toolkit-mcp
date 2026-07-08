@@ -17,9 +17,9 @@ def pandoc_available() -> bool:
 def convert_to_docx(
     markdown_path: str,
     output_path: str,
-    bib_path: str = None,
-    csl_file: str = None,
-    metadata: dict = None,
+    bib_path: str | None = None,
+    csl_file: str | None = None,
+    metadata: dict | None = None,
 ) -> dict:
     """Convert a Markdown file to Word (.docx) using pandoc.
 

@@ -140,7 +140,7 @@ class IACRSearcher(PaperSource):
             return None
 
     def search(
-        self, query: str, max_results: int = 10, fetch_details: bool = True
+        self, query: str, max_results: int = 10, fetch_details: bool = True, **kwargs
     ) -> list[Paper]:
         """
         Search IACR ePrint Archive
@@ -153,7 +153,7 @@ class IACRSearcher(PaperSource):
         Returns:
             List[Paper]: List of paper objects
         """
-        papers = []
+        papers: list[Paper] = []
 
         try:
             # Construct search parameters
@@ -444,8 +444,8 @@ if __name__ == "__main__":
             print(f"\n{i}. {paper.title}")
             print(f"   Paper ID: {paper.paper_id}")
             print(f"   Authors: {', '.join(paper.authors)}")
-            print(f"   Categories: {', '.join(paper.categories)}")
-            print(f"   Keywords: {', '.join(paper.keywords)}")
+            print(f"   Categories: {', '.join(paper.categories or [])}")
+            print(f"   Keywords: {', '.join(paper.keywords or [])}")
             print(f"   Last Updated: {paper.updated_date}")
             print(f"   URL: {paper.url}")
             print(f"   PDF: {paper.pdf_url}")
@@ -470,8 +470,8 @@ if __name__ == "__main__":
             print(f"\n{i}. {paper.title}")
             print(f"   Paper ID: {paper.paper_id}")
             print(f"   Authors: {', '.join(paper.authors)}")
-            print(f"   Categories: {', '.join(paper.categories)}")
-            print(f"   Keywords: {', '.join(paper.keywords)} (from search)")
+            print(f"   Categories: {', '.join(paper.categories or [])}")
+            print(f"   Keywords: {', '.join(paper.keywords or [])} (from search)")
             if paper.abstract:
                 print(f"   Abstract: {paper.abstract[:150]}...")
     except Exception as e:
@@ -487,7 +487,7 @@ if __name__ == "__main__":
             print(f"\nManual fetch for paper {test_paper_id}:")
             print(f"Title: {paper_details.title}")
             print(f"Authors: {', '.join(paper_details.authors)}")
-            print(f"Keywords: {', '.join(paper_details.keywords)}")
+            print(f"Keywords: {', '.join(paper_details.keywords or [])}")
             print(
                 f"Publication Info: {paper_details.extra.get('publication_info', 'N/A') if paper_details.extra else 'N/A'}"
             )

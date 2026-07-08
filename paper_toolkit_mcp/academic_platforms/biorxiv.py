@@ -18,7 +18,7 @@ class BioRxivSearcher(PaperSource):
         self.timeout = 30
         self.max_retries = 3
 
-    def search(self, query: str, max_results: int = 10, days: int = 30) -> list[Paper]:
+    def search(self, query: str, max_results: int = 10, days: int = 30, **kwargs) -> list[Paper]:
         """
         Search for papers on bioRxiv by category within the last N days.
 
@@ -37,7 +37,7 @@ class BioRxivSearcher(PaperSource):
         # Format category: lowercase and replace spaces with underscores
         category = query.lower().replace(' ', '_')
 
-        papers = []
+        papers: list[Paper] = []
         cursor = 0
         while len(papers) < max_results:
             url = f"{self.BASE_URL}/{start_date}/{end_date}/{cursor}"
@@ -119,6 +119,7 @@ class BioRxivSearcher(PaperSource):
                 if tries == self.max_retries:
                     raise Exception(f"Failed to download PDF after {self.max_retries} attempts: {e}")
                 print(f"Attempt {tries} failed, retrying...")
+        raise Exception(f"Failed to download PDF after {self.max_retries} attempts")
 
     def read_paper(self, paper_id: str, save_path: str = "./downloads") -> str:
         """

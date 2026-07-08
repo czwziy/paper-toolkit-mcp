@@ -15,7 +15,7 @@ def check_sci_hub_accessible():
         # Test with a simple request to see if sci-hub responds
         response = requests.get("https://sci-hub.se", timeout=10)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 
@@ -164,7 +164,7 @@ class TestSciHubFetcher(unittest.TestCase):
     def test_output_directory_creation(self):
         """Test that output directory is created"""
         new_dir = os.path.join(self.test_dir, "subdir", "nested")
-        fetcher = SciHubFetcher(output_dir=new_dir)
+        SciHubFetcher(output_dir=new_dir)
         self.assertTrue(os.path.exists(new_dir))
 
     @unittest.skipUnless(check_sci_hub_accessible(), "Sci-Hub not accessible")

@@ -11,7 +11,7 @@ def check_api_accessible():
     try:
         response = requests.get("https://api.medRxiv.org/details/medrxiv/0/1", timeout=5)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 class TestMedRxivSearcher(unittest.TestCase):

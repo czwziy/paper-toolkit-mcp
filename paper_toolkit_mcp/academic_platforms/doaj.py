@@ -77,7 +77,7 @@ class DOAJSearcher(PaperSource):
         if max_results < 1:
             max_results = 10
 
-        papers = []
+        papers: list[Paper] = []
         page_size = min(max_results, 100)  # DOAJ max page size
         page = 1
 
@@ -85,7 +85,7 @@ class DOAJSearcher(PaperSource):
             # Build Lucene query
             lucene_query = self._build_lucene_query(query, kwargs)
 
-            params = {
+            params: dict[str, Any] = {
                 'page': page,
                 'pageSize': page_size,
                 'query': lucene_query
@@ -470,7 +470,7 @@ if __name__ == "__main__":
         for i, paper in enumerate(papers):
             print(f"{i+1}. {paper.title}")
             print(f"   Authors: {', '.join(paper.authors[:3])}")
-            print(f"   Journal: {paper.extra.get('journal', 'Unknown')}")
+            print(f"   Journal: {(paper.extra or {}).get('journal', 'Unknown')}")
             print(f"   Year: {paper.published_date.year if paper.published_date else 'Unknown'}")
             print(f"   DOI: {paper.doi}")
             print(f"   PDF: {'Yes' if paper.pdf_url else 'No'}")

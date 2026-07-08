@@ -1,8 +1,8 @@
 # paper_toolkit_mcp/sources/pubmed.py
 from datetime import datetime
-from xml.etree import ElementTree as ET
 
 import requests
+from defusedxml import ElementTree as ET
 
 from ..paper import Paper
 from ..utils import extract_doi
@@ -14,15 +14,15 @@ class PubMedSearcher(PaperSource):
     SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     FETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
-    def search(self, query: str, max_results: int = 10, sort: str = 'relevance') -> list[Paper]:
-        search_params = {
+    def search(self, query: str, max_results: int = 10, sort: str = 'relevance', **kwargs) -> list[Paper]:
+        search_params: dict[str, str | int] = {
             'db': 'pubmed',
             'term': query,
             'retmax': max_results,
             'retmode': 'xml',
             'sort': sort,
         }
-        search_response = requests.get(self.SEARCH_URL, params=search_params)
+        search_response = requests.get(self.SEARCH_URL, params=search_params, timeout=30)
         search_root = ET.fromstring(search_response.content)
         ids = [id.text for id in search_root.findall('.//Id') if id.text]
         if not ids:
@@ -33,7 +33,7 @@ class PubMedSearcher(PaperSource):
             'id': ','.join(ids),
             'retmode': 'xml'
         }
-        fetch_response = requests.get(self.FETCH_URL, params=fetch_params)
+        fetch_response = requests.get(self.FETCH_URL, params=fetch_params, timeout=30)
         fetch_root = ET.fromstring(fetch_response.content)
 
         papers = []

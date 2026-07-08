@@ -167,11 +167,11 @@ class SciHubFetcher:
             name = re.sub(r'#view=(.+)', '', name)
             if name.endswith('.pdf'):
                 # Generate hash for uniqueness
-                pdf_hash = hashlib.md5(response.content).hexdigest()[:8]
+                pdf_hash = hashlib.md5(response.content, usedforsecurity=False).hexdigest()[:8]
                 base_name = name[:-4]  # Remove .pdf
                 return f"{pdf_hash}_{base_name}.pdf"
 
         # Fallback: use identifier
         clean_identifier = re.sub(r'[^\w\-_.]', '_', identifier)
-        pdf_hash = hashlib.md5(response.content).hexdigest()[:8]
+        pdf_hash = hashlib.md5(response.content, usedforsecurity=False).hexdigest()[:8]
         return f"{pdf_hash}_{clean_identifier}.pdf"

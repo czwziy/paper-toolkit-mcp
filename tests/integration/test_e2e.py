@@ -480,8 +480,10 @@ results["unpaywall"] = (ok_s, ok_d, ok_r)
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 def icon(v):
-    if v is True:  return "✅"
-    if v is False: return "❌"
+    if v is True:
+        return "✅"
+    if v is False:
+        return "❌"
     return "➖"  # N/A
 
 print("\n" + SEP)

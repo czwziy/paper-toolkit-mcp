@@ -109,11 +109,11 @@ class GoogleScholarSearcher(PaperSource):
             logger.warning(f"Failed to parse paper: {e}")
             return None
 
-    def search(self, query: str, max_results: int = 10) -> list[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search Google Scholar with custom parameters
         """
-        papers = []
+        papers: list[Paper] = []
         start = 0
         results_per_page = min(10, max_results)
 

@@ -23,7 +23,7 @@ class ArxivSearcher(PaperSource):
             'Accept': 'application/atom+xml, application/xml;q=0.9, */*;q=0.8',
         })
 
-    def search(self, query: str, max_results: int = 10, sort_by: str = 'relevance', sort_order: str = 'descending') -> list[Paper]:
+    def search(self, query: str, max_results: int = 10, sort_by: str = 'relevance', sort_order: str = 'descending', **kwargs) -> list[Paper]:
         params = {
             'search_query': f'all:{query}',
             'max_results': max_results,
@@ -82,7 +82,7 @@ class ArxivSearcher(PaperSource):
 
     def download_pdf(self, paper_id: str, save_path: str) -> str:
         pdf_url = f"https://arxiv.org/pdf/{paper_id}.pdf"
-        response = requests.get(pdf_url)
+        response = requests.get(pdf_url, timeout=30)
         os.makedirs(save_path, exist_ok=True)
         output_file = f"{save_path}/{paper_id}.pdf"
         with open(output_file, 'wb') as f:

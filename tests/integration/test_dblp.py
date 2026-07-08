@@ -16,7 +16,7 @@ def check_api_accessible():
             timeout=10
         )
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 

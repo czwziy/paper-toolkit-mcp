@@ -9,10 +9,13 @@ OAI-PMH, such as BASE and CiteSeerX.
 
 import logging
 import time
-import xml.etree.ElementTree as ET
 from datetime import datetime
 
+# register_namespace 只影响 tostring() 输出格式，不涉及解析，无 XXE 风险
+from xml.etree.ElementTree import register_namespace  # nosec B405
+
 import requests
+from defusedxml import ElementTree as ET
 
 from ..paper import Paper
 from .base import PaperSource
@@ -30,7 +33,7 @@ NS_MAP = {
 def _register_namespaces():
     """Register XML namespaces for pretty printing."""
     for prefix, uri in NS_MAP.items():
-        ET.register_namespace(prefix, uri)
+        register_namespace(prefix, uri)
 
 _register_namespaces()
 
@@ -77,7 +80,7 @@ class OAIPMHSearcher(PaperSource):
         Returns:
             List of Paper objects
         """
-        papers = []
+        papers: list[Paper] = []
         params = {
             'verb': 'ListRecords',
             'metadataPrefix': self.metadata_prefix,

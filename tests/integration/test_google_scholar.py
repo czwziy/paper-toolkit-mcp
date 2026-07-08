@@ -10,7 +10,7 @@ def check_scholar_accessible():
     try:
         response = requests.get("https://scholar.google.com", timeout=5)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 class TestGoogleScholarSearcher(unittest.TestCase):

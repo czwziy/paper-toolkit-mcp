@@ -8,7 +8,10 @@ Supports:
 - GB/T 7714-2015, APA 7th edition, and IEEE citation styles
 """
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def parse_citation_placeholders(text: str) -> list[dict]:
@@ -610,7 +613,7 @@ def get_paper_by_identifier(
     id_type: str,
     identifier: str,
     cache=None,
-) -> dict:
+) -> dict | None:
     """Get paper metadata by identifier type and value.
 
     Args:
@@ -633,7 +636,7 @@ def get_paper_by_identifier(
         return None
 
 
-def _get_paper_by_doi(doi: str, cache=None) -> dict:
+def _get_paper_by_doi(doi: str, cache=None) -> dict | None:
     """Get paper by DOI using CrossRef API."""
     import requests
 
@@ -663,12 +666,12 @@ def _get_paper_by_doi(doi: str, cache=None) -> dict:
             if cache:
                 cache.set(doi, "crossref", [paper])
             return paper
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch paper metadata: {e}")
     return None
 
 
-def _get_paper_by_pmid(pmid: str, cache=None) -> dict:
+def _get_paper_by_pmid(pmid: str, cache=None) -> dict | None:
     """Get paper by PMID using Entrez API."""
     import requests
 
@@ -681,7 +684,7 @@ def _get_paper_by_pmid(pmid: str, cache=None) -> dict:
         fetch_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={pmid}&retmode=xml"
         resp = requests.get(fetch_url, timeout=10)
         if resp.status_code == 200 and "<PubmedArticle>" in resp.text:
-            from xml.etree import ElementTree as ET
+            from defusedxml import ElementTree as ET
             root = ET.fromstring(resp.text)
             article = root.find(".//Article")
             if article is not None:
@@ -720,12 +723,12 @@ def _get_paper_by_pmid(pmid: str, cache=None) -> dict:
                 if cache:
                     cache.set(pmid, "pubmed", [paper])
                 return paper
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch paper metadata: {e}")
     return None
 
 
-def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict:
+def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict | None:
     """Get paper by arXiv ID."""
     import re
 
@@ -740,7 +743,7 @@ def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict:
         url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200 and "<entry>" in resp.text:
-            from xml.etree import ElementTree as ET
+            from defusedxml import ElementTree as ET
             root = ET.fromstring(resp.xml if hasattr(resp, 'xml') else resp.text)
             ns = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 
@@ -773,12 +776,12 @@ def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict:
                 if cache:
                     cache.set(arxiv_id, "arxiv", [paper])
                 return paper
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch paper metadata: {e}")
     return None
 
 
-def _get_paper_by_title(title: str, cache=None) -> dict:
+def _get_paper_by_title(title: str, cache=None) -> dict | None:
     """Get paper by title using CrossRef search."""
     import requests
 
@@ -789,7 +792,7 @@ def _get_paper_by_title(title: str, cache=None) -> dict:
 
     try:
         url = "https://api.crossref.org/works"
-        params = {"query.title": title, "rows": 1}
+        params: dict[str, str | int] = {"query.title": title, "rows": 1}
         resp = requests.get(url, params=params, timeout=10)
         if resp.status_code == 200:
             items = resp.json()["message"].get("items", [])
@@ -812,8 +815,8 @@ def _get_paper_by_title(title: str, cache=None) -> dict:
                 if cache:
                     cache.set(title, "crossref", [paper], search_type="title")
                 return paper
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch paper metadata: {e}")
     return None
 
 

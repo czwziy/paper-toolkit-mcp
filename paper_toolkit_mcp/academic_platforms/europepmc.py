@@ -396,6 +396,7 @@ if __name__ == "__main__":
     # Test the EuropePMCSearcher
     import os
     import sys
+    import tempfile
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
     searcher = EuropePMCSearcher()
@@ -419,12 +420,12 @@ if __name__ == "__main__":
         print("\n\nTesting Europe PMC PDF download...")
         test_id = papers[0].paper_id
         try:
-            pdf_path = searcher.download_pdf(test_id, "/tmp/europepmc_test")
+            pdf_path = searcher.download_pdf(test_id, f"{tempfile.gettempdir()}/europepmc_test")
             print(f"PDF downloaded to: {pdf_path}")
 
             # Test text extraction
             print("\nTesting text extraction...")
-            text = searcher.read_paper(test_id, "/tmp/europepmc_test")
+            text = searcher.read_paper(test_id, f"{tempfile.gettempdir()}/europepmc_test")
             print(f"Extracted text length: {len(text)} characters")
             if len(text) > 200:
                 print(f"Text preview: {text[:200]}...")

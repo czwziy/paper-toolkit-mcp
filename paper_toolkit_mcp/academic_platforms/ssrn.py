@@ -201,7 +201,7 @@ class SSRNSearcher(PaperSource):
         Returns:
             (html_text, error_message) — one of them will be empty.
         """
-        attempts = [
+        attempts: list[tuple[str, dict[str, str | int]]] = [
             (self.SEARCH_URL, {"txtSearchTerm": query, "npage": page}),
             (self.ALT_SEARCH_URL, {"txtKeywords": query, "page": page}),
         ]

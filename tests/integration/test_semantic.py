@@ -15,7 +15,7 @@ def check_semantic_accessible():
     try:
         response = requests.get("https://api.semanticscholar.org/graph/v1/paper/5bbfdf2e62f0508c65ba6de9c72fe2066fd98138", timeout=5)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 

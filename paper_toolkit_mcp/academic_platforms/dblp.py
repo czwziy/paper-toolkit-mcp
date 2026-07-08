@@ -1,11 +1,11 @@
 # paper_toolkit_mcp/academic_platforms/dblp.py
 import logging
 import time
-import xml.etree.ElementTree as ET
 from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
+from defusedxml import ElementTree as ET
 
 from ..paper import Paper
 from ..utils import extract_doi
@@ -152,9 +152,9 @@ class DBLPSearcher(PaperSource):
                     details_link = entry.select_one('li.details a[href]')
                     ee_link = entry.select_one('li.ee a[href]')
                     if details_link and details_link.get('href'):
-                        paper_url = details_link['href']
+                        paper_url = str(details_link['href'])
                     if ee_link and ee_link.get('href'):
-                        ee_href = ee_link['href']
+                        ee_href = str(ee_link['href'])
                         extracted = extract_doi(ee_href)
                         if extracted:
                             doi = extracted
@@ -175,7 +175,7 @@ class DBLPSearcher(PaperSource):
                         if text and text not in authors and len(text) < 120:
                             authors.append(text)
 
-                    entry_id = entry.get('id') or f"dblp_{hash(title) & 0xffffffff:08x}"
+                    entry_id = str(entry.get('id') or f"dblp_{hash(title) & 0xffffffff:08x}")
 
                     papers.append(Paper(
                         paper_id=entry_id,
@@ -382,6 +382,6 @@ if __name__ == "__main__":
         print(f"\n{i+1}. {paper.title}")
         print(f"   Authors: {', '.join(paper.authors[:3])}{'...' if len(paper.authors) > 3 else ''}")
         print(f"   DOI: {paper.doi}")
-        print(f"   Year: {paper.extra.get('year', 'N/A')}")
-        print(f"   Venue: {paper.extra.get('venue', 'N/A')}")
+        print(f"   Year: {(paper.extra or {}).get('year', 'N/A')}")
+        print(f"   Venue: {(paper.extra or {}).get('venue', 'N/A')}")
         print(f"   URL: {paper.url}")

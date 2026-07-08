@@ -1641,8 +1641,8 @@ async def export_references(
             )
             if paper:
                 papers.append(paper)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch paper {id_value}: {e}")
 
     if not papers:
         return "No papers found for the given identifiers."

@@ -205,8 +205,8 @@ class HALSearcher(PaperSource):
             # Even if content-type is not pdf, if redirect lands at a PDF URL, use it
             if head.status_code == 200:
                 return candidate
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"HEAD request failed for {candidate}: {e}")
         return ""
 
     def _parse_doc(self, doc: dict[str, Any]) -> Paper | None:

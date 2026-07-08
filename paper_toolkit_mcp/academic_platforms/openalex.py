@@ -41,7 +41,7 @@ class OpenAlexSearcher(PaperSource):
             logger.warning(f"Error reconstructing OpenAlex abstract: {e}")
             return ""
 
-    def search(self, query: str, max_results: int = 10) -> list[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search OpenAlex works. Uses the 'search' filter.
 
@@ -52,7 +52,7 @@ class OpenAlexSearcher(PaperSource):
         Returns:
             List[Paper]: List of found papers with metadata.
         """
-        papers = []
+        papers: list[Paper] = []
 
         try:
             params = {

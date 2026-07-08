@@ -11,7 +11,7 @@ def check_iacr_accessible():
     try:
         response = requests.get("https://eprint.iacr.org", timeout=5)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 

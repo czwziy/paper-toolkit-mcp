@@ -14,9 +14,9 @@ class SearchCache:
 
     def __init__(
         self,
-        cache_dir: str = None,
+        cache_dir: str | None = None,
         ttl_hours: int = 24,
-    ):
+    ) -> None:
         """Initialize cache.
 
         Args:
@@ -36,7 +36,7 @@ class SearchCache:
         """Generate cache key from query and parameters."""
         params_str = json.dumps(kwargs, sort_keys=True)
         raw_key = f"{source}:{query}:{params_str}"
-        return hashlib.md5(raw_key.encode()).hexdigest()
+        return hashlib.md5(raw_key.encode(), usedforsecurity=False).hexdigest()
 
     def _get_cache_path(self, cache_key: str) -> Path:
         """Get cache file path for a given key."""

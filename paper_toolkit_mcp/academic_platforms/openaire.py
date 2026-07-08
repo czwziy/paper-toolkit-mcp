@@ -1,12 +1,12 @@
 # paper_toolkit_mcp/academic_platforms/openaire.py
 import logging
 import time
-import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any
 
 import requests
 import urllib3
+from defusedxml import ElementTree as ET
 from requests.exceptions import SSLError
 
 from ..config import get_env
@@ -44,7 +44,7 @@ class OpenAiresearcher(PaperSource):
             self.session.headers.update({'Authorization': f'Bearer {self.api_key}'})
 
     def _search_with_retry(self, query: str, max_results: int, **kwargs) -> list[Paper]:
-        request_profiles = [
+        request_profiles: list[dict[str, Any]] = [
             {
                 'params': {
                     'keywords': query,
@@ -714,6 +714,6 @@ if __name__ == "__main__":
         print(f"   Authors: {', '.join(paper.authors[:3])}{'...' if len(paper.authors) > 3 else ''}")
         print(f"   DOI: {paper.doi}")
         print(f"   Year: {paper.published_date.year if paper.published_date else 'N/A'}")
-        print(f"   Open Access: {paper.extra.get('open_access', 'N/A')}")
-        print(f"   Publisher: {paper.extra.get('publisher', 'N/A')}")
+        print(f"   Open Access: {(paper.extra or {}).get('open_access', 'N/A')}")
+        print(f"   Publisher: {(paper.extra or {}).get('publisher', 'N/A')}")
         print(f"   URL: {paper.url}")

@@ -3,9 +3,9 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from xml.etree import ElementTree as ET
 
 import requests
+from defusedxml import ElementTree as ET
 from pypdf import PdfReader
 
 from ..paper import Paper
@@ -44,7 +44,7 @@ class PMCSearcher(PaperSource):
         Returns:
             List[Paper]: List of found papers with metadata
         """
-        papers = []
+        papers: list[Paper] = []
 
         try:
             # Step 1: Use E-utilities to search PMC database
@@ -379,6 +379,7 @@ if __name__ == "__main__":
     # Test the PMCSearcher
     import os
     import sys
+    import tempfile
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
     searcher = PMCSearcher()
@@ -402,12 +403,12 @@ if __name__ == "__main__":
         print("\n\nTesting PMC PDF download...")
         test_pmcid = papers[0].paper_id
         try:
-            pdf_path = searcher.download_pdf(test_pmcid, "/tmp/pmc_test")
+            pdf_path = searcher.download_pdf(test_pmcid, f"{tempfile.gettempdir()}/pmc_test")
             print(f"PDF downloaded to: {pdf_path}")
 
             # Test text extraction
             print("\nTesting text extraction...")
-            text = searcher.read_paper(test_pmcid, "/tmp/pmc_test")
+            text = searcher.read_paper(test_pmcid, f"{tempfile.gettempdir()}/pmc_test")
             print(f"Extracted text length: {len(text)} characters")
             print(f"Text preview: {text[:200]}...")
         except Exception as e:

@@ -314,7 +314,7 @@ if __name__ == "__main__":
         for i, paper in enumerate(papers, 1):
             print(f"{i}. {paper.title} (DOI: {paper.doi})")
             print(f"   Authors: {', '.join(paper.authors[:3])}{'...' if len(paper.authors) > 3 else ''}")
-            print(f"   Published: {paper.published_date.year}")
+            print(f"   Published: {paper.published_date.year if paper.published_date else 'N/A'}")
             print(f"   Citations: {paper.citations}")
             publisher = paper.extra.get('publisher', 'N/A') if paper.extra else 'N/A'
             print(f"   Publisher: {publisher}")
@@ -328,9 +328,9 @@ if __name__ == "__main__":
         print("Testing DOI lookup functionality...")
         test_doi = papers[0].doi
         try:
-            paper = searcher.get_paper_by_doi(test_doi)
-            if paper:
-                print(f"Successfully retrieved paper by DOI: {paper.title}")
+            paper_by_doi = searcher.get_paper_by_doi(test_doi)
+            if paper_by_doi:
+                print(f"Successfully retrieved paper by DOI: {paper_by_doi.title}")
             else:
                 print("Failed to retrieve paper by DOI")
         except Exception as e:
