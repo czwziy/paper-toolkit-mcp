@@ -6,29 +6,31 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Any
 from pathlib import Path
 
+from .config import get_work_dir
+
 
 class SearchCache:
     """Manages search result caching with TTL support.
-    
-    Cache is stored in the current working directory under .paper_cache/
-    so users can easily see and manage cached files.
+
+    Cache is stored under ``<WORK_DIR>/.paper_cache/`` so it follows the
+    user's project folder (set via ``paper_toolkit_mcp_WORK_DIR``). Falls back
+    to the current working directory when WORK_DIR is unset.
     """
-    
+
     def __init__(
         self,
         cache_dir: str = None,
         ttl_hours: int = 24,
     ):
         """Initialize cache.
-        
+
         Args:
-            cache_dir: Cache directory path. If None, uses current working
-                       directory's .paper_cache/ subfolder.
+            cache_dir: Cache directory path. If None, uses
+                       ``<WORK_DIR>/.paper_cache`` (or CWD/.paper_cache).
             ttl_hours: Cache time-to-live in hours.
         """
         if cache_dir is None:
-            # Use current working directory
-            self.cache_dir = Path.cwd() / ".paper_cache"
+            self.cache_dir = Path(get_work_dir()) / ".paper_cache"
         else:
             self.cache_dir = Path(cache_dir)
         self.ttl = timedelta(hours=ttl_hours)

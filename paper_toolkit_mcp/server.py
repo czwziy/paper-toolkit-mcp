@@ -6,7 +6,7 @@ import logging
 import re
 import httpx
 from mcp.server.fastmcp import FastMCP
-from .config import get_env
+from .config import get_env, get_work_dir
 from .cache import SearchCache
 from .reference import (
     parse_citation_placeholders,
@@ -76,16 +76,49 @@ ssrn_searcher = SSRNSearcher()
 # scihub_searcher = SciHubSearcher()
 
 
-# Asynchronous helper to adapt synchronous searchers
-# Runs blocking requests-based calls in a thread pool to avoid blocking the event loop.
+# Shared search cache. Lives in <WORK_DIR>/.paper_cache so results follow the
+# user's project folder. Created once at import time (WORK_DIR is read from the
+# environment, which the MCP client sets before launching the server).
+_search_cache = SearchCache()
+
+# Default download directory, resolved once at import from WORK_DIR (or CWD).
+# Used as the default save_path for all download_* / read_* MCP tools so files
+# land inside the user's project folder regardless of the server process CWD.
+DEFAULT_SAVE_PATH = os.path.join(get_work_dir(), "downloads")
+
+
+def _searcher_source_name(searcher) -> str:
+    """Best-effort source name for cache keying."""
+    name = getattr(searcher, "source_name", "")
+    if name:
+        return name
+    return searcher.__class__.__name__.replace("Searcher", "").lower()
+
+
+# Asynchronous helper to adapt synchronous searchers.
+# Runs blocking requests-based calls in a thread pool to avoid blocking the
+# event loop, and transparently reads/writes the shared search cache.
+#
+# Cache key = (source, query, max_results, **kwargs). On a hit the cached list
+# of paper dicts is returned directly (no network call, no Paper rebuild), so
+# there is no to_dict/from_dict roundtrip on the hot path. On a miss the
+# searcher runs and its dict output is cached.
 async def async_search(searcher, query: str, max_results: int, **kwargs) -> List[Dict]:
-    if 'year' in kwargs:
-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, year=kwargs['year'])
-    elif kwargs:
-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, **kwargs)
-    else:
-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results)
-    return [paper.to_dict() for paper in papers]
+    source_name = _searcher_source_name(searcher)
+
+    cached = _search_cache.get(query, source_name, max_results=max_results, **kwargs)
+    if cached is not None:
+        return cached
+
+    papers = await asyncio.to_thread(
+        searcher.search, query, max_results=max_results, **kwargs
+    )
+    paper_dicts = [paper.to_dict() for paper in papers]
+    if paper_dicts:
+        _search_cache.set(
+            query, source_name, paper_dicts, max_results=max_results, **kwargs
+        )
+    return paper_dicts
 
 
 ALL_SOURCES = [
@@ -460,17 +493,17 @@ async def search_iacr(
     Returns:
         List of paper metadata in dictionary format.
     """
-    papers = await asyncio.to_thread(iacr_searcher.search, query, max_results, fetch_details)
-    return [paper.to_dict() for paper in papers] if papers else []
+    papers = await async_search(iacr_searcher, query, max_results, fetch_details=fetch_details)
+    return papers if papers else []
 
 
 @mcp.tool()
-async def download_arxiv(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_arxiv(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF of an arXiv paper.
 
     Args:
         paper_id: arXiv paper ID (e.g., '2106.12345').
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         Path to the downloaded PDF file.
     """
@@ -478,12 +511,12 @@ async def download_arxiv(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def download_pubmed(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_pubmed(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to download PDF of a PubMed paper.
 
     Args:
         paper_id: PubMed ID (PMID).
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Message indicating that direct PDF download is not supported.
     """
@@ -494,12 +527,12 @@ async def download_pubmed(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def download_biorxiv(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_biorxiv(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF of a bioRxiv paper.
 
     Args:
         paper_id: bioRxiv DOI.
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         Path to the downloaded PDF file.
     """
@@ -507,12 +540,12 @@ async def download_biorxiv(paper_id: str, save_path: str = "./downloads") -> str
 
 
 @mcp.tool()
-async def download_medrxiv(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_medrxiv(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF of a medRxiv paper.
 
     Args:
         paper_id: medRxiv DOI.
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         Path to the downloaded PDF file.
     """
@@ -520,12 +553,12 @@ async def download_medrxiv(paper_id: str, save_path: str = "./downloads") -> str
 
 
 @mcp.tool()
-async def download_iacr(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_iacr(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF of an IACR ePrint paper.
 
     Args:
         paper_id: IACR paper ID (e.g., '2009/101').
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         Path to the downloaded PDF file.
     """
@@ -533,12 +566,12 @@ async def download_iacr(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def read_arxiv_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_arxiv_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from an arXiv paper PDF.
 
     Args:
         paper_id: arXiv paper ID (e.g., '2106.12345').
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: The extracted text content of the paper.
     """
@@ -550,7 +583,7 @@ async def read_arxiv_paper(paper_id: str, save_path: str = "./downloads") -> str
 
 
 @mcp.tool()
-async def read_pubmed_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_pubmed_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a PubMed paper.
 
     Args:
@@ -563,12 +596,12 @@ async def read_pubmed_paper(paper_id: str, save_path: str = "./downloads") -> st
 
 
 @mcp.tool()
-async def read_biorxiv_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_biorxiv_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a bioRxiv paper PDF.
 
     Args:
         paper_id: bioRxiv DOI.
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: The extracted text content of the paper.
     """
@@ -580,12 +613,12 @@ async def read_biorxiv_paper(paper_id: str, save_path: str = "./downloads") -> s
 
 
 @mcp.tool()
-async def read_medrxiv_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_medrxiv_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a medRxiv paper PDF.
 
     Args:
         paper_id: medRxiv DOI.
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: The extracted text content of the paper.
     """
@@ -597,12 +630,12 @@ async def read_medrxiv_paper(paper_id: str, save_path: str = "./downloads") -> s
 
 
 @mcp.tool()
-async def read_iacr_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_iacr_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from an IACR ePrint paper PDF.
 
     Args:
         paper_id: IACR paper ID (e.g., '2009/101').
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: The extracted text content of the paper.
     """
@@ -632,7 +665,7 @@ async def search_semantic(query: str, year: Optional[str] = None, max_results: i
 
 
 @mcp.tool()
-async def download_semantic(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_semantic(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF of a Semantic Scholar paper.    
 
     Args:
@@ -645,7 +678,7 @@ async def download_semantic(paper_id: str, save_path: str = "./downloads") -> st
             - PMID:<id> (e.g., "PMID:19872477")
             - PMCID:<id> (e.g., "PMCID:2323736")
             - URL:<url> (e.g., "URL:https://arxiv.org/abs/2106.15928v1")
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         Path to the downloaded PDF file.
     """ 
@@ -653,7 +686,7 @@ async def download_semantic(paper_id: str, save_path: str = "./downloads") -> st
 
 
 @mcp.tool()
-async def read_semantic_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_semantic_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a Semantic Scholar paper. 
 
     Args:
@@ -666,7 +699,7 @@ async def read_semantic_paper(paper_id: str, save_path: str = "./downloads") -> 
             - PMID:<id> (e.g., "PMID:19872477")
             - PMCID:<id> (e.g., "PMCID:2323736")
             - URL:<url> (e.g., "URL:https://arxiv.org/abs/2106.15928v1")
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: The extracted text content of the paper.
     """
@@ -723,12 +756,12 @@ async def get_crossref_paper_by_doi(doi: str) -> Dict:
 
 
 @mcp.tool()
-async def download_crossref(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_crossref(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to download PDF of a CrossRef paper.
 
     Args:
         paper_id: CrossRef DOI (e.g., '10.1038/nature12373').
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Message indicating that direct PDF download is not supported.
         
@@ -745,7 +778,7 @@ async def download_crossref(paper_id: str, save_path: str = "./downloads") -> st
 @mcp.tool()
 async def download_scihub(
     identifier: str,
-    save_path: str = "./downloads",
+    save_path: str = DEFAULT_SAVE_PATH,
     base_url: str = "https://sci-hub.se",
 ) -> str:
     """Download paper PDF via Sci-Hub (optional fallback connector).
@@ -770,7 +803,7 @@ async def download_with_fallback(
     paper_id: str,
     doi: str = "",
     title: str = "",
-    save_path: str = "./downloads",
+    save_path: str = DEFAULT_SAVE_PATH,
     use_scihub: bool = True,
     scihub_base_url: str = "https://sci-hub.se",
 ) -> str:
@@ -858,12 +891,12 @@ async def download_with_fallback(
 
 
 @mcp.tool()
-async def read_crossref_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_crossref_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to read and extract text content from a CrossRef paper.
 
     Args:
         paper_id: CrossRef DOI (e.g., '10.1038/nature12373').
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: Message indicating that direct paper reading is not supported.
         
@@ -1062,7 +1095,7 @@ async def search_unpaywall(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def read_dblp_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_dblp_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to read and extract text content from a dblp paper.
 
     Note: dblp doesn't provide direct paper content access.
@@ -1078,7 +1111,7 @@ async def read_dblp_paper(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def download_dblp(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_dblp(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from dblp.
 
     Note: dblp doesn't provide direct PDF access.
@@ -1086,7 +1119,7 @@ async def download_dblp(paper_id: str, save_path: str = "./downloads") -> str:
 
     Args:
         paper_id: dblp paper identifier.
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Message indicating that direct PDF download is not supported.
     """
@@ -1094,12 +1127,12 @@ async def download_dblp(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def read_openaire_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_openaire_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to read and extract text content from an OpenAIRE paper.
 
     Args:
         paper_id: OpenAIRE paper identifier.
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: Extracted text or error message.
     """
@@ -1107,12 +1140,12 @@ async def read_openaire_paper(paper_id: str, save_path: str = "./downloads") -> 
 
 
 @mcp.tool()
-async def download_openaire(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_openaire(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from OpenAIRE.
 
     Args:
         paper_id: OpenAIRE paper identifier.
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Path to downloaded PDF or error message.
     """
@@ -1120,12 +1153,12 @@ async def download_openaire(paper_id: str, save_path: str = "./downloads") -> st
 
 
 @mcp.tool()
-async def read_citeseerx_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_citeseerx_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a CiteSeerX paper.
 
     Args:
         paper_id: CiteSeerX paper identifier.
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: Extracted text or fallback abstract/error message.
     """
@@ -1133,12 +1166,12 @@ async def read_citeseerx_paper(paper_id: str, save_path: str = "./downloads") ->
 
 
 @mcp.tool()
-async def download_citeseerx(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_citeseerx(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from CiteSeerX.
 
     Args:
         paper_id: CiteSeerX paper identifier.
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Path to downloaded PDF or error message.
     """
@@ -1146,12 +1179,12 @@ async def download_citeseerx(paper_id: str, save_path: str = "./downloads") -> s
 
 
 @mcp.tool()
-async def read_doaj_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_doaj_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a DOAJ paper.
 
     Args:
         paper_id: DOAJ paper identifier.
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: Extracted text content.
     """
@@ -1159,12 +1192,12 @@ async def read_doaj_paper(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def download_doaj(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_doaj(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from DOAJ.
 
     Args:
         paper_id: DOAJ paper identifier.
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Path to downloaded PDF.
     """
@@ -1172,12 +1205,12 @@ async def download_doaj(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def read_base_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_base_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a BASE paper.
 
     Args:
         paper_id: BASE paper identifier.
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: Extracted text content.
     """
@@ -1185,12 +1218,12 @@ async def read_base_paper(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def download_base(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_base(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from BASE.
 
     Args:
         paper_id: BASE paper identifier.
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Path to downloaded PDF.
     """
@@ -1198,12 +1231,12 @@ async def download_base(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def read_zenodo_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_zenodo_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a Zenodo paper.
 
     Args:
         paper_id: Zenodo paper identifier.
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: Extracted text content.
     """
@@ -1211,12 +1244,12 @@ async def read_zenodo_paper(paper_id: str, save_path: str = "./downloads") -> st
 
 
 @mcp.tool()
-async def download_zenodo(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_zenodo(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from Zenodo.
 
     Args:
         paper_id: Zenodo paper identifier.
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Path to downloaded PDF.
     """
@@ -1224,12 +1257,12 @@ async def download_zenodo(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def read_hal_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_hal_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a HAL paper.
 
     Args:
         paper_id: HAL paper identifier.
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: Extracted text content.
     """
@@ -1237,12 +1270,12 @@ async def read_hal_paper(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def download_hal(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_hal(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from HAL.
 
     Args:
         paper_id: HAL paper identifier.
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Path to downloaded PDF.
     """
@@ -1250,7 +1283,7 @@ async def download_hal(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def read_ssrn_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_ssrn_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read paper content from SSRN.
 
     Note: SSRN connector is metadata-only and read is not supported.
@@ -1265,7 +1298,7 @@ async def read_ssrn_paper(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def download_ssrn(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_ssrn(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from SSRN.
 
     Note: SSRN connector is metadata-only and download is not supported.
@@ -1280,12 +1313,12 @@ async def download_ssrn(paper_id: str, save_path: str = "./downloads") -> str:
 
 
 @mcp.tool()
-async def read_openalex_paper(paper_id: str, save_path: str = "./downloads") -> str:
+async def read_openalex_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to read and extract text content from an OpenAlex paper.
 
     Args:
         paper_id: OpenAlex paper ID.
-        save_path: Directory where the PDF is/will be saved (default: './downloads').
+        save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: Message indicating that direct paper reading is not supported natively.
     """
@@ -1293,12 +1326,12 @@ async def read_openalex_paper(paper_id: str, save_path: str = "./downloads") -> 
 
 
 @mcp.tool()
-async def download_openalex(paper_id: str, save_path: str = "./downloads") -> str:
+async def download_openalex(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from OpenAlex.
 
     Args:
         paper_id: OpenAlex paper ID.
-        save_path: Directory to save the PDF (default: './downloads').
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Error message, typically OpenAlex relies on extracted pdf_url instead of direct downloads.
     """
@@ -1322,24 +1355,24 @@ if ieee_searcher is not None:
         return await async_search(ieee_searcher, query, max_results)
 
     @mcp.tool()
-    async def download_ieee(paper_id: str, save_path: str = "./downloads") -> str:
+    async def download_ieee(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
         """Download a PDF from IEEE Xplore.  Requires paper_toolkit_mcp_IEEE_API_KEY (or IEEE_API_KEY) and institutional access.
 
         Args:
             paper_id: IEEE Xplore paper identifier.
-            save_path: Directory to save the PDF (default: './downloads').
+            save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
         Returns:
             str: Path to saved PDF or error message.
         """
         return await asyncio.to_thread(ieee_searcher.download_pdf, paper_id, save_path)
 
     @mcp.tool()
-    async def read_ieee_paper(paper_id: str, save_path: str = "./downloads") -> str:
+    async def read_ieee_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
         """Download and read an IEEE Xplore paper.  Requires paper_toolkit_mcp_IEEE_API_KEY (or IEEE_API_KEY).
 
         Args:
             paper_id: IEEE Xplore paper identifier.
-            save_path: Directory where the PDF is/will be saved (default: './downloads').
+            save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
         Returns:
             str: Extracted text content.
         """
@@ -1363,40 +1396,28 @@ if acm_searcher is not None:
         return await async_search(acm_searcher, query, max_results)
 
     @mcp.tool()
-    async def download_acm(paper_id: str, save_path: str = "./downloads") -> str:
+    async def download_acm(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
         """Download a PDF from ACM Digital Library.  Requires paper_toolkit_mcp_ACM_API_KEY (or ACM_API_KEY) and institutional access.
 
         Args:
             paper_id: ACM DL paper identifier.
-            save_path: Directory to save the PDF (default: './downloads').
+            save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
         Returns:
             str: Path to saved PDF or error message.
         """
         return await asyncio.to_thread(acm_searcher.download_pdf, paper_id, save_path)
 
     @mcp.tool()
-    async def read_acm_paper(paper_id: str, save_path: str = "./downloads") -> str:
+    async def read_acm_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
         """Download and read an ACM Digital Library paper.  Requires paper_toolkit_mcp_ACM_API_KEY (or ACM_API_KEY).
 
         Args:
             paper_id: ACM DL paper identifier.
-            save_path: Directory where the PDF is/will be saved (default: './downloads').
+            save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
         Returns:
             str: Extracted text content.
         """
         return acm_searcher.read_paper(paper_id, save_path)
-
-
-# Initialize cache instance
-_search_cache = SearchCache()
-
-
-def main():
-    mcp.run(transport="stdio")
-
-
-if __name__ == "__main__":
-    main()
 
 
 # ---------------------------------------------------------------------------
@@ -1444,7 +1465,7 @@ async def process_manuscript(
         markdown_content = f.read()
     
     if output_dir is None:
-        output_dir = os.path.dirname(markdown_path) or "."
+        output_dir = os.path.dirname(markdown_path) or get_work_dir()
     os.makedirs(output_dir, exist_ok=True)
     
     base_name = os.path.splitext(os.path.basename(markdown_path))[0]
@@ -1695,3 +1716,11 @@ async def cache_clear() -> Dict[str, Any]:
         "status": "cleared",
         "entries_cleared": count,
     }
+
+
+def main():
+    mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()
