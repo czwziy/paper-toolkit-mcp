@@ -4,6 +4,8 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from .config import get_work_dir
+
 
 class SearchCache:
     """Manages search result caching with TTL support.
@@ -20,13 +22,12 @@ class SearchCache:
         """Initialize cache.
 
         Args:
-            cache_dir: Cache directory path. If None, uses current working
-                       directory's .paper_cache/ subfolder.
+            cache_dir: Cache directory path. If None, uses
+                       ``<WORK_DIR>/.paper_cache`` (or CWD/.paper_cache).
             ttl_hours: Cache time-to-live in hours.
         """
         if cache_dir is None:
-            # Use current working directory
-            self.cache_dir = Path.cwd() / ".paper_cache"
+            self.cache_dir = Path(get_work_dir()) / ".paper_cache"
         else:
             self.cache_dir = Path(cache_dir)
         self.ttl = timedelta(hours=ttl_hours)

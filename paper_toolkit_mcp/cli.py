@@ -245,7 +245,7 @@ async def cmd_manuscript(args: argparse.Namespace) -> int:
         markdown_content = f.read()
 
     cache = SearchCache(ttl_hours=args.cache_ttl)
-    output_dir = args.output or os.path.dirname(markdown_path) or "."
+    output_dir = args.output or os.path.dirname(markdown_path) or get_work_dir()
     os.makedirs(output_dir, exist_ok=True)
     base_name = os.path.splitext(os.path.basename(markdown_path))[0]
 
@@ -410,13 +410,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_dl = sub.add_parser("download", help="Download a paper PDF")
     p_dl.add_argument("source", help="Source platform (e.g. arxiv, semantic)")
     p_dl.add_argument("paper_id", help="Paper identifier")
-    p_dl.add_argument("-o", "--save-path", default="./downloads", help="Save directory (default: ./downloads)")
+    p_dl.add_argument("-o", "--save-path", default=DEFAULT_SAVE_PATH,
+                      help="Save directory (default: <WORK_DIR>/downloads)")
 
     # read
     p_read = sub.add_parser("read", help="Download and extract text from a paper")
     p_read.add_argument("source", help="Source platform (e.g. arxiv, semantic)")
     p_read.add_argument("paper_id", help="Paper identifier")
-    p_read.add_argument("-o", "--save-path", default="./downloads", help="Save directory (default: ./downloads)")
+    p_read.add_argument("-o", "--save-path", default=DEFAULT_SAVE_PATH,
+                        help="Save directory (default: <WORK_DIR>/downloads)")
 
     # sources
     sub.add_parser("sources", help="List available sources")

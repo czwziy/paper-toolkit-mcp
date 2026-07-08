@@ -28,7 +28,6 @@ class PaperSource(ABC):
 
         Args:
             query: Search query string.
-            cache_kwargs: Additional kwargs for cache key generation.
             **kwargs: Source-specific parameters (e.g., max_results, year).
 
         Returns:
