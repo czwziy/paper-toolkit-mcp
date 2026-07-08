@@ -7,6 +7,8 @@ This base class provides common functionality for platforms that support
 OAI-PMH, such as BASE and CiteSeerX.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from datetime import datetime

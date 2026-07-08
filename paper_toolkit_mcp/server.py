@@ -31,7 +31,7 @@ from .academic_platforms.ssrn import SSRNSearcher
 from .academic_platforms.unpaywall import UnpaywallResolver, UnpaywallSearcher
 from .academic_platforms.zenodo import ZenodoSearcher
 from .cache import SearchCache
-from .config import get_env
+from .config import get_env, get_work_dir
 from .pandoc_helper import convert_to_docx, pandoc_available
 
 # from .academic_platforms.hub import SciHubSearcher
@@ -46,6 +46,11 @@ from .reference import (
 # Initialize MCP server
 mcp = FastMCP("paper_toolkit_server")
 logger = logging.getLogger(__name__)
+
+# Default download directory, resolved once at import from WORK_DIR (or CWD).
+# Used as the default save_path for all download_* / read_* MCP tools so files
+# land inside the user's project folder regardless of the server process CWD.
+DEFAULT_SAVE_PATH = os.path.join(get_work_dir(), "downloads")
 
 # Instances of searchers
 arxiv_searcher = ArxivSearcher()

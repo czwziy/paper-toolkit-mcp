@@ -31,7 +31,7 @@ from .academic_platforms.semantic import SemanticSearcher
 from .academic_platforms.ssrn import SSRNSearcher
 from .academic_platforms.unpaywall import UnpaywallResolver, UnpaywallSearcher
 from .academic_platforms.zenodo import ZenodoSearcher
-from .config import get_env
+from .config import get_env, get_work_dir
 
 # ---------------------------------------------------------------------------
 # Searcher registry
@@ -120,6 +120,11 @@ def _dedupe(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # Async helpers
 # ---------------------------------------------------------------------------
+
+# Default download directory, resolved once at import from WORK_DIR (or CWD).
+# Used as the default save_path for the download / read CLI commands so files
+# land inside the user's project folder regardless of the process CWD.
+DEFAULT_SAVE_PATH = os.path.join(get_work_dir(), "downloads")
 
 async def _async_search(searcher: Any, query: str, max_results: int, **kwargs) -> list[dict]:
     if kwargs:
