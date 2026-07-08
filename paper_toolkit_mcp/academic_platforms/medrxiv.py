@@ -12,7 +12,6 @@ class MedRxivSearcher(PaperSource):
 
     def __init__(self):
         self.session = requests.Session()
-        self.session.proxies = {'http': None, 'https': None}
         self.timeout = 30
         self.max_retries = 3
 

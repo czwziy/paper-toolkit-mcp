@@ -10,7 +10,8 @@ import os
 import sys
 from typing import Any, Dict, List
 
-from .config import get_env
+from .config import get_env, get_work_dir
+from .cache import SearchCache
 from .academic_platforms.arxiv import ArxivSearcher
 from .academic_platforms.pubmed import PubMedSearcher
 from .academic_platforms.biorxiv import BioRxivSearcher
@@ -121,12 +122,34 @@ def _dedupe(papers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # Async helpers
 # ---------------------------------------------------------------------------
 
+# Shared search cache (<WORK_DIR>/.paper_cache) and default download dir.
+_search_cache = SearchCache()
+DEFAULT_SAVE_PATH = os.path.join(get_work_dir(), "downloads")
+
+
+def _searcher_source_name(searcher: Any) -> str:
+    name = getattr(searcher, "source_name", "")
+    return name if name else searcher.__class__.__name__.replace("Searcher", "").lower()
+
+
 async def _async_search(searcher: Any, query: str, max_results: int, **kwargs) -> List[Dict]:
-    if kwargs:
-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, **kwargs)
-    else:
-        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results)
-    return [p.to_dict() for p in papers]
+    """Run a searcher in a thread pool with transparent cache read/write.
+
+    Cache key = (source, query, max_results, **kwargs). On a hit the cached
+    paper dicts are returned directly; on a miss the searcher runs and its
+    dict output is cached.
+    """
+    source_name = _searcher_source_name(searcher)
+
+    cached = _search_cache.get(query, source_name, max_results=max_results, **kwargs)
+    if cached is not None:
+        return cached
+
+    papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, **kwargs)
+    paper_dicts = [p.to_dict() for p in papers]
+    if paper_dicts:
+        _search_cache.set(query, source_name, paper_dicts, max_results=max_results, **kwargs)
+    return paper_dicts
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +267,7 @@ async def cmd_manuscript(args: argparse.Namespace) -> int:
         markdown_content = f.read()
     
     cache = SearchCache(ttl_hours=args.cache_ttl)
-    output_dir = args.output or os.path.dirname(markdown_path) or "."
+    output_dir = args.output or os.path.dirname(markdown_path) or get_work_dir()
     os.makedirs(output_dir, exist_ok=True)
     base_name = os.path.splitext(os.path.basename(markdown_path))[0]
     
@@ -409,13 +432,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_dl = sub.add_parser("download", help="Download a paper PDF")
     p_dl.add_argument("source", help="Source platform (e.g. arxiv, semantic)")
     p_dl.add_argument("paper_id", help="Paper identifier")
-    p_dl.add_argument("-o", "--save-path", default="./downloads", help="Save directory (default: ./downloads)")
+    p_dl.add_argument("-o", "--save-path", default=DEFAULT_SAVE_PATH,
+                      help="Save directory (default: <WORK_DIR>/downloads)")
 
     # read
     p_read = sub.add_parser("read", help="Download and extract text from a paper")
     p_read.add_argument("source", help="Source platform (e.g. arxiv, semantic)")
     p_read.add_argument("paper_id", help="Paper identifier")
-    p_read.add_argument("-o", "--save-path", default="./downloads", help="Save directory (default: ./downloads)")
+    p_read.add_argument("-o", "--save-path", default=DEFAULT_SAVE_PATH,
+                        help="Save directory (default: <WORK_DIR>/downloads)")
 
     # sources
     sub.add_parser("sources", help="List available sources")

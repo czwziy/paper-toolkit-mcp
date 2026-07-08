@@ -57,3 +57,60 @@ class Paper:
             'references': '; '.join(self.references) if self.references else '',
             'extra': str(self.extra) if self.extra else ''
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> "Paper":
+        """Reconstruct a Paper from its to_dict() output.
+
+        Reverses the list-joining ('; ') and ISO date serialization performed
+        by to_dict(), so cached paper dicts can be safely turned back into
+        Paper objects without TypeError on list-typed fields.
+        """
+        import ast
+
+        def _split(value):
+            if isinstance(value, list):
+                return value
+            if not value:
+                return []
+            return [part for part in str(value).split("; ") if part]
+
+        def _parse_dt(value):
+            if not value:
+                return None
+            try:
+                return datetime.fromisoformat(str(value))
+            except (ValueError, TypeError):
+                return None
+
+        extra = data.get("extra", "")
+        if isinstance(extra, str) and extra:
+            try:
+                extra = ast.literal_eval(extra)
+            except (ValueError, SyntaxError):
+                extra = {}
+        elif not isinstance(extra, dict):
+            extra = {}
+
+        try:
+            citations = int(data.get("citations", 0) or 0)
+        except (TypeError, ValueError):
+            citations = 0
+
+        return cls(
+            paper_id=data.get("paper_id", ""),
+            title=data.get("title", ""),
+            authors=_split(data.get("authors", "")),
+            abstract=data.get("abstract", ""),
+            doi=data.get("doi", ""),
+            published_date=_parse_dt(data.get("published_date")),
+            pdf_url=data.get("pdf_url", ""),
+            url=data.get("url", ""),
+            source=data.get("source", ""),
+            updated_date=_parse_dt(data.get("updated_date")),
+            categories=_split(data.get("categories", "")),
+            keywords=_split(data.get("keywords", "")),
+            citations=citations,
+            references=_split(data.get("references", "")),
+            extra=extra,
+        )

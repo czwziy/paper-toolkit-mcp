@@ -18,37 +18,37 @@ class PaperSource(ABC):
     def search_with_cache(
         self,
         query: str,
-        cache_kwargs: Optional[dict] = None,
         **kwargs,
     ) -> List[Paper]:
         """Search with caching support.
-        
-        This method checks cache first, and if not found, calls the abstract
-        search() method and caches the result.
-        
+
+        Checks the cache first (keyed by source, query, and all kwargs); on a
+        miss, calls the abstract search() method and caches the result.
+
+        All kwargs (e.g. max_results, year, sort_by) are used BOTH as the
+        search() arguments AND as part of the cache key, so searches with
+        different parameters never collide in the cache.
+
         Args:
             query: Search query string.
-            cache_kwargs: Additional kwargs for cache key generation.
             **kwargs: Source-specific parameters (e.g., max_results, year).
-            
+
         Returns:
             List of Paper objects.
         """
-        if cache_kwargs is None:
-            cache_kwargs = {}
-        
-        if self._cache is not None:
-            cached_papers = self._cache.get(query, self.source_name, **cache_kwargs)
+        cache = getattr(self, "_cache", None)
+
+        if cache is not None:
+            cached_papers = cache.get(query, self.source_name, **kwargs)
             if cached_papers is not None:
-                papers = [Paper(**p) for p in cached_papers]
-                return papers
-        
+                return [Paper.from_dict(p) for p in cached_papers]
+
         papers = self.search(query, **kwargs)
-        
-        if self._cache is not None and papers:
+
+        if cache is not None and papers:
             paper_dicts = [p.to_dict() for p in papers]
-            self._cache.set(query, self.source_name, paper_dicts, **cache_kwargs)
-        
+            cache.set(query, self.source_name, paper_dicts, **kwargs)
+
         return papers
     
     @property

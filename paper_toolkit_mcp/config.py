@@ -11,17 +11,44 @@ _ENV_LOADED = False
 ENV_PREFIX = "paper_toolkit_mcp_"
 
 
+def _work_dir_from_env() -> str:
+    """Read WORK_DIR directly from os.environ without triggering env loading.
+
+    Used by _candidate_env_files() so that .env discovery can honor WORK_DIR
+    without recursing into load_env_file(). WORK_DIR must therefore be set as a
+    real environment variable (e.g. in the MCP server config's env block).
+    """
+    value = os.getenv(f"{ENV_PREFIX}WORK_DIR", "").strip()
+    if not value:
+        value = os.getenv("WORK_DIR", "").strip()
+    return value
+
+
 def _candidate_env_files() -> list[Path]:
     explicit_path = os.getenv(f"{ENV_PREFIX}ENV_FILE", "").strip()
     if explicit_path:
         return [Path(explicit_path).expanduser()]
 
+    candidates: list[Path] = []
+
+    work_dir = _work_dir_from_env()
+    if work_dir:
+        candidates.append(Path(work_dir).expanduser() / ".env")
+
     cwd_env = Path.cwd() / ".env"
     project_env = Path(__file__).resolve().parent.parent / ".env"
+    candidates.append(cwd_env)
+    if project_env != cwd_env:
+        candidates.append(project_env)
 
-    if cwd_env == project_env:
-        return [cwd_env]
-    return [cwd_env, project_env]
+    # Dedupe while preserving order
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for cand in candidates:
+        if cand not in seen:
+            seen.add(cand)
+            unique.append(cand)
+    return unique
 
 
 def _strip_quotes(value: str) -> str:
@@ -84,3 +111,21 @@ def get_env(name: str, default: Optional[str] = "") -> str:
             return os.environ.get(key, "")
 
     return "" if default is None else str(default)
+
+
+def get_work_dir() -> str:
+    """Return the unified working directory for all outputs.
+
+    Resolved from the ``paper_toolkit_mcp_WORK_DIR`` (or legacy ``WORK_DIR``)
+    environment variable, falling back to the current working directory when
+    unset. All download paths, the search cache, and the default ``.env``
+    lookup are derived from this directory so that files stay inside the user's
+    project folder regardless of where the MCP server process is launched.
+
+    Note: for ``.env`` discovery to honor WORK_DIR, WORK_DIR must be set as a
+    real environment variable (e.g. via the MCP server config's ``env`` block),
+    not only inside a ``.env`` file.
+    """
+    load_env_file()
+    value = _work_dir_from_env()
+    return value if value else os.getcwd()
