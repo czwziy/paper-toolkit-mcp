@@ -1,15 +1,16 @@
 # paper_toolkit_mcp/academic_platforms/pmc.py
-from typing import List, Optional
-import requests
-from xml.etree import ElementTree as ET
-from datetime import datetime
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
+from xml.etree import ElementTree as ET
+
+import requests
+from pypdf import PdfReader
+
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
-from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class PMCSearcher(PaperSource):
             'Accept': 'application/xml'
         })
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search PMC open access articles.
 
@@ -100,7 +101,7 @@ class PMCSearcher(PaperSource):
 
         return papers
 
-    def _parse_docsum(self, docsum: ET.Element) -> Optional[Paper]:
+    def _parse_docsum(self, docsum: ET.Element) -> Paper | None:
         """Parse a single PMC eSummary DocSum element into a Paper object."""
         try:
             def _item_text(name: str) -> str:
@@ -118,7 +119,7 @@ class PMCSearcher(PaperSource):
                 return None
 
             # Parse authors list
-            authors: List[str] = []
+            authors: list[str] = []
             author_list_item = docsum.find("./Item[@Name='AuthorList']")
             if author_list_item is not None:
                 for sub_item in author_list_item.findall('./Item'):
@@ -165,10 +166,10 @@ class PMCSearcher(PaperSource):
             logger.warning(f"Error parsing PMC DocSum: {e}")
             return None
 
-    def _parse_article(self, article: ET.Element) -> Optional[Paper]:
+    def _parse_article(self, article: ET.Element) -> Paper | None:
         """Parse a single PMC article XML element into a Paper object."""
         try:
-            def elem_text(elem: Optional[ET.Element]) -> str:
+            def elem_text(elem: ET.Element | None) -> str:
                 if elem is None:
                     return ''
                 return ''.join(elem.itertext()).strip()
@@ -376,8 +377,8 @@ class PMCSearcher(PaperSource):
 
 if __name__ == "__main__":
     # Test the PMCSearcher
-    import sys
     import os
+    import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
     searcher = PMCSearcher()

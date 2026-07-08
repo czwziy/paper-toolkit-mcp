@@ -18,17 +18,17 @@ Legal/compliance note:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
-import os
-from typing import List, Optional, Any, Tuple
+from typing import Any
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 
-from .base import PaperSource
 from ..paper import Paper
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class SSRNSearcher(PaperSource):
     # PaperSource interface
     # ------------------------------------------------------------------
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """Search SSRN and return metadata records.
 
         Args:
@@ -80,7 +80,7 @@ class SSRNSearcher(PaperSource):
         Returns:
             List of :class:`~paper_toolkit_mcp.paper.Paper` objects.
         """
-        papers: List[Paper] = []
+        papers: list[Paper] = []
         page = 1
         per_page = 15  # SSRN default
 
@@ -195,7 +195,7 @@ class SSRNSearcher(PaperSource):
             time.sleep(self._RATE_LIMIT_SECONDS - elapsed)
         self._last_request_time = time.monotonic()
 
-    def _fetch_page(self, query: str, page: int) -> Tuple[str, str]:
+    def _fetch_page(self, query: str, page: int) -> tuple[str, str]:
         """Fetch one page of SSRN search results.
 
         Returns:
@@ -281,10 +281,10 @@ class SSRNSearcher(PaperSource):
 
         return ""
 
-    def _parse_results(self, html: str) -> List[Paper]:
+    def _parse_results(self, html: str) -> list[Paper]:
         """Parse SSRN search-results HTML into Paper objects."""
         soup = BeautifulSoup(html, "html.parser")
-        papers: List[Paper] = []
+        papers: list[Paper] = []
 
         # SSRN result items are typically in <div class="title"> / <div class="authors"> etc.
         # The structure may shift with site updates; we use heuristic selectors.
@@ -302,7 +302,7 @@ class SSRNSearcher(PaperSource):
 
         return papers
 
-    def _parse_block(self, block: Any) -> Optional[Paper]:
+    def _parse_block(self, block: Any) -> Paper | None:
         """Extract a single paper from an SSRN result block element."""
         try:
             # Title

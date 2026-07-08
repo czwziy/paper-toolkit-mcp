@@ -7,15 +7,16 @@ access to high quality, open access, peer-reviewed journals.
 API Documentation: https://doaj.org/api/v2
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import requests
 import logging
 import time
+from datetime import datetime
+from typing import Any
 from urllib.parse import quote
-from ..paper import Paper
-from ..utils import extract_doi
+
+import requests
+
 from ..config import get_env
+from ..paper import Paper
 from .base import PaperSource
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ class DOAJSearcher(PaperSource):
     BASE_URL = "https://doaj.org/api"
     USER_AGENT = "paper-toolkit-mcp/0.1.3 (https://github.com/openags/paper-toolkit-mcp)"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """Initialize DOAJ searcher.
 
         Args:
@@ -51,7 +52,7 @@ class DOAJSearcher(PaperSource):
                 "Get a free API key at: https://doaj.org/apply-for-api-key/"
             )
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """Search DOAJ for open access journal articles.
 
         Args:
@@ -147,7 +148,7 @@ class DOAJSearcher(PaperSource):
 
         return papers[:max_results]
 
-    def _build_lucene_query(self, query: str, filters: Dict[str, Any]) -> str:
+    def _build_lucene_query(self, query: str, filters: dict[str, Any]) -> str:
         """Build Lucene query string for DOAJ API.
 
         DOAJ uses Lucene query syntax with field-specific filters.
@@ -213,7 +214,7 @@ class DOAJSearcher(PaperSource):
 
         return " AND ".join(f"({part})" for part in query_parts)
 
-    def _parse_doaj_item(self, item: Dict[str, Any]) -> Optional[Paper]:
+    def _parse_doaj_item(self, item: dict[str, Any]) -> Paper | None:
         """Parse DOAJ API response item to Paper object.
 
         Args:

@@ -1,16 +1,17 @@
 # paper_toolkit_mcp/academic_platforms/openaire.py
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import requests
 import logging
-import xml.etree.ElementTree as ET
-import urllib3
 import time
+import xml.etree.ElementTree as ET
+from datetime import datetime
+from typing import Any
+
+import requests
+import urllib3
 from requests.exceptions import SSLError
 
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
-from ..config import get_env
 from .base import PaperSource
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ class OpenAiresearcher(PaperSource):
     # OpenAIRE supports both JSON and XML formats
     DEFAULT_FORMAT = "json"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize OpenAIRE searcher.
 
@@ -42,7 +43,7 @@ class OpenAiresearcher(PaperSource):
         if self.api_key:
             self.session.headers.update({'Authorization': f'Bearer {self.api_key}'})
 
-    def _search_with_retry(self, query: str, max_results: int, **kwargs) -> List[Paper]:
+    def _search_with_retry(self, query: str, max_results: int, **kwargs) -> list[Paper]:
         request_profiles = [
             {
                 'params': {
@@ -75,7 +76,7 @@ class OpenAiresearcher(PaperSource):
             },
         ]
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         for profile in request_profiles:
             for attempt in range(3):
                 try:
@@ -106,7 +107,7 @@ class OpenAiresearcher(PaperSource):
 
                     response.raise_for_status()
                     root = ET.fromstring(response.content)
-                    papers: List[Paper] = []
+                    papers: list[Paper] = []
                     result_nodes = self._find_top_level_results(root)
 
                     for node in result_nodes:
@@ -128,7 +129,7 @@ class OpenAiresearcher(PaperSource):
     def _local_name(tag: Any) -> str:
         return tag.split('}')[-1] if isinstance(tag, str) else ''
 
-    def _first_child(self, parent: Optional[ET.Element], local_name: str) -> Optional[ET.Element]:
+    def _first_child(self, parent: ET.Element | None, local_name: str) -> ET.Element | None:
         if parent is None:
             return None
         for child in list(parent):
@@ -136,11 +137,11 @@ class OpenAiresearcher(PaperSource):
                 return child
         return None
 
-    def _direct_texts(self, parent: Optional[ET.Element], local_name: str) -> List[str]:
+    def _direct_texts(self, parent: ET.Element | None, local_name: str) -> list[str]:
         if parent is None:
             return []
 
-        values: List[str] = []
+        values: list[str] = []
         for child in list(parent):
             if self._local_name(child.tag).lower() == local_name.lower() and child.text:
                 text = child.text.strip()
@@ -158,7 +159,7 @@ class OpenAiresearcher(PaperSource):
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             return self.session.get(url, **kwargs)
 
-    def _find_top_level_results(self, root: ET.Element) -> List[ET.Element]:
+    def _find_top_level_results(self, root: ET.Element) -> list[ET.Element]:
         for element in root.iter():
             if self._local_name(element.tag).lower() != 'results':
                 continue
@@ -170,7 +171,7 @@ class OpenAiresearcher(PaperSource):
 
         return []
 
-    def _parse_date(self, value: str) -> Optional[datetime]:
+    def _parse_date(self, value: str) -> datetime | None:
         if not value:
             return None
 
@@ -186,7 +187,7 @@ class OpenAiresearcher(PaperSource):
                 continue
         return None
 
-    def _matches_filters(self, paper: Paper, filters: Dict[str, Any]) -> bool:
+    def _matches_filters(self, paper: Paper, filters: dict[str, Any]) -> bool:
         extra = paper.extra or {}
 
         year_filter = filters.get('year')
@@ -223,8 +224,8 @@ class OpenAiresearcher(PaperSource):
 
         return True
 
-    def _extract_rel_data(self, rel_node: Optional[ET.Element]) -> Dict[str, Any]:
-        data: Dict[str, Any] = {
+    def _extract_rel_data(self, rel_node: ET.Element | None) -> dict[str, Any]:
+        data: dict[str, Any] = {
             'authors': [],
             'pids': [],
             'urls': [],
@@ -267,7 +268,7 @@ class OpenAiresearcher(PaperSource):
         data['score'] = len(data['pids']) * 3 + len(data['urls']) * 2 + len(data['authors'])
         return data
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search OpenAIRE for publications.
 
@@ -286,7 +287,7 @@ class OpenAiresearcher(PaperSource):
         Returns:
             List of Paper objects
         """
-        papers: List[Paper] = []
+        papers: list[Paper] = []
 
         try:
             papers = self._search_with_retry(query, max_results, **kwargs)
@@ -320,7 +321,7 @@ class OpenAiresearcher(PaperSource):
 
         return papers
 
-    def _parse_openaire_xml_result(self, node: ET.Element) -> Optional[Paper]:
+    def _parse_openaire_xml_result(self, node: ET.Element) -> Paper | None:
         """Parse OpenAIRE researchProducts XML result element."""
         try:
             header = self._first_child(node, 'header')
@@ -331,7 +332,7 @@ class OpenAiresearcher(PaperSource):
 
             title_candidates = self._direct_texts(target, 'title')
 
-            main_titles: List[str] = []
+            main_titles: list[str] = []
             for child in list(target):
                 if self._local_name(child.tag).lower() != 'title' or not child.text:
                     continue
@@ -476,7 +477,7 @@ class OpenAiresearcher(PaperSource):
             logger.warning("Error parsing OpenAIRE XML result: %s", exc)
             return None
 
-    def _parse_openaire_result(self, result: Dict[str, Any]) -> Optional[Paper]:
+    def _parse_openaire_result(self, result: dict[str, Any]) -> Paper | None:
         """Parse an OpenAIRE API result into a Paper object."""
         try:
             # Extract metadata from result

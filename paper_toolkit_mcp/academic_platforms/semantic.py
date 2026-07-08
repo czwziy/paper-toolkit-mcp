@@ -1,17 +1,17 @@
-from typing import List, Optional
-from datetime import datetime
+import logging
 import os
-import requests
-from bs4 import BeautifulSoup
-import time
 import random
+import re
+import time
+from datetime import datetime
+
+import requests
+from pypdf import PdfReader
+
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
-import logging
-from pypdf import PdfReader
-import re
-from ..config import get_env
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class SemanticSearcher(PaperSource):
             }
         )
 
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
+    def _parse_date(self, date_str: str) -> datetime | None:
         """Parse date from Semantic Scholar format (e.g., '2025-06-02')"""
         try:
             return datetime.strptime(date_str.strip(), "%Y-%m-%d")
@@ -87,7 +87,7 @@ class SemanticSearcher(PaperSource):
 
         return ""
 
-    def _parse_paper(self, item) -> Optional[Paper]:
+    def _parse_paper(self, item) -> Paper | None:
         """Parse single paper entry from Semantic Scholar HTML and optionally fetch detailed info"""
         try:
             authors = [author["name"] for author in item.get("authors", [])]
@@ -140,7 +140,7 @@ class SemanticSearcher(PaperSource):
             return None
 
     @staticmethod
-    def get_api_key() -> Optional[str]:
+    def get_api_key() -> str | None:
         """
         Get the Semantic Scholar API key from environment variables.
         Returns None if no API key is set or if it's empty, enabling unauthenticated access.
@@ -262,10 +262,10 @@ class SemanticSearcher(PaperSource):
     def search(
         self,
         query: str,
-        year: Optional[str] = None,
+        year: str | None = None,
         max_results: int = 10,
         fetch_details: bool = False,
-    ) -> List[Paper]:
+    ) -> list[Paper]:
         """
         Search Semantic Scholar
 
@@ -466,7 +466,7 @@ class SemanticSearcher(PaperSource):
             logger.error(f"Read paper error: {e}")
             return f"Error reading paper: {e}"
 
-    def get_paper_details(self, paper_id: str) -> Optional[Paper]:
+    def get_paper_details(self, paper_id: str) -> Paper | None:
         """
         Fetch detailed information for a specific Semantic Scholar paper
 

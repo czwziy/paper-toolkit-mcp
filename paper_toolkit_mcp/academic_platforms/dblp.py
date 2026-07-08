@@ -1,10 +1,10 @@
 # paper_toolkit_mcp/academic_platforms/dblp.py
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import requests
 import logging
-import xml.etree.ElementTree as ET
 import time
+import xml.etree.ElementTree as ET
+from datetime import datetime
+
+import requests
 from bs4 import BeautifulSoup
 
 from ..paper import Paper
@@ -30,7 +30,7 @@ class DBLPSearcher(PaperSource):
             'Accept': 'application/xml, application/json'
         })
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search dblp for computer science publications.
 
@@ -126,9 +126,9 @@ class DBLPSearcher(PaperSource):
 
         return papers
 
-    def _search_html_fallback(self, query: str, max_results: int) -> List[Paper]:
+    def _search_html_fallback(self, query: str, max_results: int) -> list[Paper]:
         """Fallback search via dblp HTML endpoint when API is unavailable."""
-        papers: List[Paper] = []
+        papers: list[Paper] = []
         try:
             response = self.session.get(
                 self.HTML_SEARCH_URL,
@@ -169,7 +169,7 @@ class DBLPSearcher(PaperSource):
                     if year_str.isdigit():
                         published_date = datetime(int(year_str), 1, 1)
 
-                    authors: List[str] = []
+                    authors: list[str] = []
                     for node in entry.select('[itemprop="author"] [itemprop="name"], [itemprop="author"]'):
                         text = node.get_text(' ', strip=True)
                         if text and text not in authors and len(text) < 120:
@@ -207,7 +207,7 @@ class DBLPSearcher(PaperSource):
 
         return papers
 
-    def _parse_dblp_hit(self, hit: ET.Element) -> Optional[Paper]:
+    def _parse_dblp_hit(self, hit: ET.Element) -> Paper | None:
         """Parse a dblp hit element into a Paper object."""
         try:
             # Extract basic information from info element

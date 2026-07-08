@@ -9,7 +9,6 @@ Supports:
 """
 
 import re
-from datetime import datetime
 
 
 def parse_citation_placeholders(text: str) -> list[dict]:
@@ -207,7 +206,7 @@ def generate_ris(papers: list[dict]) -> str:
 
 def _normalize_authors(authors) -> list[str]:
     """Normalize authors input to a list of individual author name strings.
-    
+
     Handles both list of strings and comma-separated string formats.
     """
     if isinstance(authors, str):
@@ -568,42 +567,42 @@ def process_manuscript(
 
 def process_manuscript_text(text: str, papers: list[dict], style: str = "gb7714") -> dict:
     """Process manuscript text by replacing citation placeholders with numbered citations.
-    
+
     This is a simplified version that replaces placeholders with [1], [2], etc.
     based on paper order, and appends the reference list at the end.
-    
+
     Args:
         text: The manuscript text containing citation placeholders.
         papers: A list of dicts, each representing a paper with 'citation_key'.
         style: Citation style for reference list.
-    
+
     Returns:
         Dict with 'formatted_text' key containing the processed text.
     """
     placeholders = parse_citation_placeholders(text)
     processed_text = text
-    
+
     paper_lookup = {}
     for idx, paper in enumerate(papers, start=1):
         citation_key = paper.get("citation_key", "")
         if citation_key:
             paper_lookup[citation_key] = idx
-    
+
     used_citations = {}
     for ph in placeholders:
         ph_key = f"{ph['type']}:{ph['identifier']}"
         ph_full = ph["full_match"]
-        
+
         if ph_key in paper_lookup and ph_key not in used_citations:
             used_citations[ph_key] = paper_lookup[ph_key]
-        
+
         if ph_key in used_citations:
             replacement = f"[{used_citations[ph_key]}]"
             processed_text = processed_text.replace(ph_full, replacement, 1)
-    
+
     ref_list = generate_reference_list(papers, style)
     processed_text += f"\n\n## References\n\n{ref_list}"
-    
+
     return {"formatted_text": processed_text}
 
 
@@ -613,12 +612,12 @@ def get_paper_by_identifier(
     cache=None,
 ) -> dict:
     """Get paper metadata by identifier type and value.
-    
+
     Args:
         id_type: One of 'doi', 'pmid', 'arxiv', 'title'.
         identifier: The identifier value.
         cache: Optional SearchCache instance.
-    
+
     Returns:
         Dict with paper metadata, or None if not found.
     """
@@ -637,12 +636,12 @@ def get_paper_by_identifier(
 def _get_paper_by_doi(doi: str, cache=None) -> dict:
     """Get paper by DOI using CrossRef API."""
     import requests
-    
+
     if cache:
         cached = cache.get(doi, "crossref")
         if cached:
             return cached[0] if cached else None
-    
+
     try:
         url = f"https://api.crossref.org/works/{doi}"
         resp = requests.get(url, timeout=10)
@@ -672,12 +671,12 @@ def _get_paper_by_doi(doi: str, cache=None) -> dict:
 def _get_paper_by_pmid(pmid: str, cache=None) -> dict:
     """Get paper by PMID using Entrez API."""
     import requests
-    
+
     if cache:
         cached = cache.get(pmid, "pubmed")
         if cached:
             return cached[0] if cached else None
-    
+
     try:
         fetch_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={pmid}&retmode=xml"
         resp = requests.get(fetch_url, timeout=10)
@@ -693,19 +692,19 @@ def _get_paper_by_pmid(pmid: str, cache=None) -> dict:
                     initials = (author.find("Initials") or ET.Element("")).text or ""
                     if lastname:
                         authors.append(f"{lastname} {initials}".strip())
-                
+
                 year_el = article.find(".//PubDate/Year")
                 year = year_el.text if year_el is not None else ""
-                
+
                 journal = (article.find(".//Journal/Title") or ET.Element("")).text or ""
                 volume = (article.find(".//JournalIssue/Volume") or ET.Element("")).text or ""
                 issue = (article.find(".//JournalIssue/Issue") or ET.Element("")).text or ""
                 medline_paging = article.find(".//Pagination/MedlinePgn")
                 pages = medline_paging.text if medline_paging is not None else ""
-                
+
                 dois = article.findall(".//ArticleId[@IdType='doi']")
                 doi = dois[0].text if dois else ""
-                
+
                 paper = {
                     "title": title,
                     "authors": authors,
@@ -728,14 +727,15 @@ def _get_paper_by_pmid(pmid: str, cache=None) -> dict:
 
 def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict:
     """Get paper by arXiv ID."""
-    import requests
     import re
-    
+
+    import requests
+
     if cache:
         cached = cache.get(arxiv_id, "arxiv")
         if cached:
             return cached[0] if cached else None
-    
+
     try:
         url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
         resp = requests.get(url, timeout=10)
@@ -743,23 +743,23 @@ def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict:
             from xml.etree import ElementTree as ET
             root = ET.fromstring(resp.xml if hasattr(resp, 'xml') else resp.text)
             ns = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
-            
+
             entry = root.find(".//atom:entry", ns)
             if entry is not None:
                 title = (entry.find("atom:title", ns) or ET.Element("")).text or ""
                 title = re.sub(r'\s+', ' ', title).strip()
-                
+
                 authors = []
                 for author in entry.findall("atom:author", ns):
                     name = (author.find("atom:name", ns) or ET.Element("")).text or ""
                     if name:
                         authors.append(name)
-                
+
                 published = (entry.find("atom:published", ns) or ET.Element("")).text or ""
                 year = published[:4] if published else ""
-                
+
                 summary = (entry.find("atom:summary", ns) or ET.Element("")).text or ""
-                
+
                 paper = {
                     "title": title,
                     "authors": authors,
@@ -781,12 +781,12 @@ def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict:
 def _get_paper_by_title(title: str, cache=None) -> dict:
     """Get paper by title using CrossRef search."""
     import requests
-    
+
     if cache:
         cached = cache.get(title, "crossref", search_type="title")
         if cached:
             return cached[0] if cached else None
-    
+
     try:
         url = "https://api.crossref.org/works"
         params = {"query.title": title, "rows": 1}

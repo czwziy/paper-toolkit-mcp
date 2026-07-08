@@ -7,12 +7,13 @@ This base class provides common functionality for platforms that support
 OAI-PMH, such as BASE and CiteSeerX.
 """
 
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import requests
-import xml.etree.ElementTree as ET
-import time
 import logging
+import time
+import xml.etree.ElementTree as ET
+from datetime import datetime
+
+import requests
+
 from ..paper import Paper
 from .base import PaperSource
 
@@ -62,7 +63,7 @@ class OAIPMHSearcher(PaperSource):
             'Accept': 'application/xml'
         })
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """Search repository using OAI-PMH ListRecords.
 
         Args:
@@ -93,8 +94,6 @@ class OAIPMHSearcher(PaperSource):
         # For simple text queries, we need to filter after retrieval
         # OAI-PMH doesn't support full-text search directly
         # We'll retrieve records and filter locally
-        retry_count = 0
-        max_retries = 3
         resumption_token = None
 
         try:
@@ -168,7 +167,7 @@ class OAIPMHSearcher(PaperSource):
 
         return papers[:max_results]
 
-    def _parse_oai_record(self, record: ET.Element) -> Optional[Paper]:
+    def _parse_oai_record(self, record: ET.Element) -> Paper | None:
         """Parse OAI-PMH record to Paper object.
 
         This base implementation handles Dublin Core (oai_dc) metadata.
@@ -309,7 +308,7 @@ class OAIPMHSearcher(PaperSource):
                 paper.extra = {}
             paper.extra['type'] = type_elem.text
 
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
+    def _parse_date(self, date_str: str) -> datetime | None:
         """Parse date string to datetime object.
 
         Handles various date formats commonly found in OAI-PMH repositories.

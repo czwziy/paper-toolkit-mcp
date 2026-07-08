@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-type-arch:
+    name: Lint + Type + Architecture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # 用于 Doc Freshness 的 git log 时间戳检查
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Install dev dependencies
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Ruff (style + isort + bugbear)
+        # 只检查生产代码 + 单元测试；integration 测试不参与 CI 门禁
+        run: ruff check paper_toolkit_mcp tests/unit
+
+      # Mypy 暂未启用：现有代码有 107 处类型问题待修复
+      # 渐进收紧计划见 .harness/constraints/contracts.md
+      # 本地可手动跑：mypy paper_toolkit_mcp
+      # - name: Mypy (types)
+      #   run: mypy paper_toolkit_mcp
+
+      - name: Import-linter (architecture layers)
+        run: lint-imports
+
+  test:
+    name: Unit tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Install dev dependencies
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Pytest (unit only — hermetic, no network)
+        run: pytest --cov --cov-report=term-missing
+
+  security-and-guards:
+    name: Security + File size + Doc freshness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Install dev dependencies
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Bandit (security scan)
+        run: bandit -r paper_toolkit_mcp -c .harness/constraints/security/bandit.yaml -q
+
+      - name: File size gate (≤ 400 lines per .py)
+        run: |
+          bad=$(find paper_toolkit_mcp -name "*.py" -exec wc -l {} + \
+                | awk '$1>400 && $2!="total" {print $2": "$1" lines"}')
+          if [ -n "$bad" ]; then
+            echo "::error::文件超过 400 行（参见 .harness/constraints/contracts.md）："
+            echo "$bad"
+            exit 1
+          fi
+          echo "All source files within size limit."
+
+      - name: Doc freshness (warn if .trae/specs/* older than 60 days)
+        run: |
+          STALE_DAYS=60
+          CUTOFF=$(( $(date +%s) - STALE_DAYS * 86400 ))
+          stale=0
+          while IFS= read -r f; do
+            ts=$(git log -1 --format=%ct -- "$f" 2>/dev/null || echo 0)
+            if [ "$ts" -gt 0 ] && [ "$ts" -lt "$CUTOFF" ]; then
+              echo "::warning file=$f::设计文档超过 $STALE_DAYS 天未更新，可能已与实现脱节"
+              stale=1
+            fi
+          done < <(find .trae/specs -name "*.md" -type f 2>/dev/null)
+          [ "$stale" = "0" ] && echo "All design docs fresh."

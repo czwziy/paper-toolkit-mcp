@@ -1,16 +1,18 @@
 # paper_toolkit_mcp/academic_platforms/core.py
-from typing import List, Optional, Dict, Any
-import requests
 import logging
 import os
+import time
 from datetime import datetime
 from pathlib import Path
-import time
+from typing import Any
+
+import requests
+from pypdf import PdfReader
+
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
-from ..config import get_env
 from .base import PaperSource
-from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,7 @@ class CORESearcher(PaperSource):
     BASE_URL = "https://api.core.ac.uk/v3"
     RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize CORE searcher.
 
@@ -39,7 +41,7 @@ class CORESearcher(PaperSource):
         else:
             logger.warning("No CORE API key provided. Searches may be rate-limited or return limited results.")
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search CORE for open access research papers.
 
@@ -158,7 +160,7 @@ class CORESearcher(PaperSource):
 
         return papers
 
-    def _parse_item(self, item: Dict[str, Any]) -> Optional[Paper]:
+    def _parse_item(self, item: dict[str, Any]) -> Paper | None:
         """Parse a single CORE API result item into a Paper object."""
         try:
             # Extract core ID
@@ -364,7 +366,7 @@ class CORESearcher(PaperSource):
             logger.error(error_msg)
             raise Exception(error_msg)
 
-    def _get_paper_details(self, paper_id: str) -> Optional[Dict[str, Any]]:
+    def _get_paper_details(self, paper_id: str) -> dict[str, Any] | None:
         """Get detailed information for a CORE paper by ID."""
         try:
             response = self.session.get(f"{self.BASE_URL}/works/{paper_id}", timeout=30)
@@ -425,8 +427,8 @@ class CORESearcher(PaperSource):
 
 if __name__ == "__main__":
     # Test the CORESearcher
-    import sys
     import os
+    import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
     # Check for API key

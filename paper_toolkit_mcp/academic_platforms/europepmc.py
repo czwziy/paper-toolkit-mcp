@@ -1,13 +1,15 @@
 # paper_toolkit_mcp/academic_platforms/europepmc.py
-from typing import List, Optional, Dict, Any
-import requests
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+
+import requests
+from pypdf import PdfReader
+
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
-from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,7 @@ class EuropePMCSearcher(PaperSource):
             'Accept': 'application/json'
         })
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search Europe PMC for biomedical literature.
 
@@ -92,7 +94,7 @@ class EuropePMCSearcher(PaperSource):
 
         return papers
 
-    def _parse_item(self, item: Dict[str, Any]) -> Optional[Paper]:
+    def _parse_item(self, item: dict[str, Any]) -> Paper | None:
         """Parse a single Europe PMC API result item into a Paper object."""
         try:
             # Extract ID (could be PMID, PMCID, or DOI)
@@ -310,7 +312,7 @@ class EuropePMCSearcher(PaperSource):
             logger.error(error_msg)
             raise Exception(error_msg)
 
-    def _get_paper_details(self, paper_id: str) -> Optional[Dict[str, Any]]:
+    def _get_paper_details(self, paper_id: str) -> dict[str, Any] | None:
         """Get detailed information for an Europe PMC paper by ID."""
         try:
             # Europe PMC API for fetching a single record
@@ -392,8 +394,8 @@ class EuropePMCSearcher(PaperSource):
 
 if __name__ == "__main__":
     # Test the EuropePMCSearcher
-    import sys
     import os
+    import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
     searcher = EuropePMCSearcher()

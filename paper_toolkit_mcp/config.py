@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +70,7 @@ def load_env_file(force: bool = False) -> None:
     _ENV_LOADED = True
 
 
-def get_env(name: str, default: Optional[str] = "") -> str:
+def get_env(name: str, default: str | None = "") -> str:
     load_env_file()
 
     normalized = name.strip()

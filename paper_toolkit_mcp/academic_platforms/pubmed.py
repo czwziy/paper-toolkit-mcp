@@ -1,19 +1,20 @@
 # paper_toolkit_mcp/sources/pubmed.py
-from typing import List
-import requests
-from xml.etree import ElementTree as ET
 from datetime import datetime
+from xml.etree import ElementTree as ET
+
+import requests
+
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
-import os
+
 
 class PubMedSearcher(PaperSource):
     """Searcher for PubMed papers"""
     SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     FETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
-    def search(self, query: str, max_results: int = 10, sort: str = 'relevance') -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, sort: str = 'relevance') -> list[Paper]:
         search_params = {
             'db': 'pubmed',
             'term': query,
@@ -26,7 +27,7 @@ class PubMedSearcher(PaperSource):
         ids = [id.text for id in search_root.findall('.//Id') if id.text]
         if not ids:
             return []
-        
+
         fetch_params = {
             'db': 'pubmed',
             'id': ','.join(ids),
@@ -34,7 +35,7 @@ class PubMedSearcher(PaperSource):
         }
         fetch_response = requests.get(self.FETCH_URL, params=fetch_params)
         fetch_root = ET.fromstring(fetch_response.content)
-        
+
         papers = []
         for article in fetch_root.findall('.//PubmedArticle'):
             try:
@@ -101,7 +102,7 @@ class PubMedSearcher(PaperSource):
 
         Returns:
             str: Error message indicating PDF download is not supported
-        
+
         Raises:
             NotImplementedError: Always raises this error as PubMed doesn't provide direct PDF access
         """
@@ -127,7 +128,7 @@ class PubMedSearcher(PaperSource):
 if __name__ == "__main__":
     # 测试 PubMedSearcher 的功能
     searcher = PubMedSearcher()
-    
+
     # 测试搜索功能
     print("Testing search functionality...")
     query = "machine learning"
@@ -142,7 +143,7 @@ if __name__ == "__main__":
             print(f"   URL: {paper.url}\n")
     except Exception as e:
         print(f"Error during search: {e}")
-    
+
     # 测试 PDF 下载功能（会返回不支持的提示）
     if papers:
         print("\nTesting PDF download functionality...")
@@ -151,7 +152,7 @@ if __name__ == "__main__":
             pdf_path = searcher.download_pdf(paper_id, "./downloads")
         except NotImplementedError as e:
             print(f"Expected error: {e}")
-    
+
     # 测试论文阅读功能（会返回不支持的提示）
     if papers:
         print("\nTesting paper reading functionality...")

@@ -2,11 +2,10 @@
 
 Simple wrapper adapted from scihub.py for downloading PDFs via Sci-Hub.
 """
-from pathlib import Path
-import re
 import hashlib
 import logging
-from typing import Optional
+import re
+from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
@@ -31,7 +30,7 @@ class SciHubFetcher:
             'Upgrade-Insecure-Requests': '1',
         }
 
-    def download_pdf(self, identifier: str) -> Optional[str]:
+    def download_pdf(self, identifier: str) -> str | None:
         """Download a PDF from Sci-Hub using a DOI, PMID, or URL.
 
         Args:
@@ -52,7 +51,7 @@ class SciHubFetcher:
 
             # Download the PDF
             response = self.session.get(pdf_url, verify=False, timeout=30)
-            
+
             if response.status_code != 200:
                 logging.error(f"Failed to download PDF, status {response.status_code}")
                 return None
@@ -64,17 +63,17 @@ class SciHubFetcher:
             # Generate filename and save
             filename = self._generate_filename(response, identifier)
             file_path = self.output_dir / filename
-            
+
             with open(file_path, 'wb') as f:
                 f.write(response.content)
-                
+
             return str(file_path)
 
         except Exception as e:
             logging.error(f"Error downloading PDF for {identifier}: {e}")
             return None
 
-    def _get_direct_url(self, identifier: str) -> Optional[str]:
+    def _get_direct_url(self, identifier: str) -> str | None:
         """Get the direct PDF URL from Sci-Hub."""
         try:
             # If it's already a direct PDF URL, return it
@@ -84,12 +83,12 @@ class SciHubFetcher:
             # Search on Sci-Hub
             search_url = f"{self.base_url}/{identifier}"
             response = self.session.get(search_url, verify=False, timeout=20)
-            
+
             if response.status_code != 200:
                 return None
 
             soup = BeautifulSoup(response.content, 'html.parser')
-            
+
             # Check for article not found
             if "article not found" in response.text.lower():
                 logging.warning("Article not found on Sci-Hub")

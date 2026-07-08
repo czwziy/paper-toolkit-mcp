@@ -21,11 +21,10 @@ Enable usage::
 from __future__ import annotations
 
 import logging
-from typing import List
 
-from .base import PaperSource
-from ..paper import Paper
 from ..config import get_env
+from ..paper import Paper
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +69,7 @@ class ACMSearcher(PaperSource):
     # PaperSource interface
     # ------------------------------------------------------------------
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:  # type: ignore[override]
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:  # type: ignore[override]
         """Search ACM Digital Library — requires paper_toolkit_mcp_ACM_API_KEY or ACM_API_KEY.
 
         Raises:

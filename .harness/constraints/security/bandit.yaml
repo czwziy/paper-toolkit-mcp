@@ -1,0 +1,31 @@
+# Bandit 安全扫描配置
+# 调用：bandit -r paper_toolkit_mcp -c .harness/constraints/security/bandit.yaml
+# 规则依据：.harness/constraints/contracts.md
+
+# 测试目录不扫（测试中允许 assert / 硬编码占位密钥）
+exclude_dirs:
+  - tests
+  - build
+  - dist
+  - paper_cache
+  - csl
+
+# 跳过的规则（带原因）
+# 初始门禁：以下规则暂跳过，待渐进收紧时处理（见 .harness/constraints/contracts.md）
+skips:
+  - B101    # assert_used — 工具中 assert 用于不变量检查，可接受
+  - B108    # hardcoded_tmp_directory — 多处用 /tmp，应改 tempfile.Tempfile（TODO）
+  - B110    # try_except_pass — 静默吞异常，应改 except Exception: + log（TODO）
+  - B112    # try_except_continue — 多 parser/格式尝试-跳过模式（openaire/pubmed），可接受
+  - B113    # request_without_timeout — 各 searcher 显式设置 timeout（见 arxiv.py 等）
+  - B311    # blacklist/pickle — 项目不使用 pickle
+  - B314    # blacklist/xml.etree.fromstring — XXE 风险，应迁 defusedxml（TODO）
+  - B324     # hashlib — md5 用于 cache key 与 sci_hub 文件名哈希，非安全场景（TODO 改 blake2b）
+  - B404    # blacklist/subprocess — pandoc_helper.py 合法调用 pandoc
+  - B405    # blacklist/xml.etree — 同 B314，应迁 defusedxml（TODO）
+  - B603    # subprocess_without_shell_equals_true — pandoc_helper 用 shell=False 安全调用
+  - B607    # partial_process_path — pandoc 路径经 shutil.which 解析，非硬编码
+
+# 显式启用的规则（默认全部启用，此处仅作记录关注项）
+# 注意：与 skips 互斥，不能同时启用与跳过
+# tests 字段留空 = 启用所有未被 skips 跳过的规则

@@ -24,10 +24,11 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv pip install --system -e ".[dev]" 2>/dev/null || uv pip install --system -e .
+        run: uv pip install --system -e ".[dev]"
 
-      - name: Run tests
-        run: python -m pytest tests/ -x -q --tb=short 2>/dev/null || echo "No test suite configured"
+      - name: Run unit tests
+        # 仅跑离线单元测试；不再用 `|| echo` 兜底吞掉失败
+        run: pytest tests/unit -q --tb=short
 
   publish:
     needs: test

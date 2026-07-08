@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 import requests
 
-from .base import PaperSource
 from ..paper import Paper
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class HALSearcher(PaperSource):
     # PaperSource interface
     # ------------------------------------------------------------------
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """Search HAL open archive.
 
         Args:
@@ -77,7 +77,7 @@ class HALSearcher(PaperSource):
         """
         max_results = max(1, min(max_results, 10000))
 
-        fq_parts: List[str] = []
+        fq_parts: list[str] = []
 
         year = kwargs.get("year")
         if year:
@@ -91,7 +91,7 @@ class HALSearcher(PaperSource):
         if domain:
             fq_parts.append(f"domain_s:{domain}")
 
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "q": query,
             "fl": self._FIELDS,
             "rows": max_results,
@@ -109,7 +109,7 @@ class HALSearcher(PaperSource):
             logger.error("HAL search failed: %s", exc)
             return []
 
-        papers: List[Paper] = []
+        papers: list[Paper] = []
         for doc in data.get("response", {}).get("docs", []):
             paper = self._parse_doc(doc)
             if paper:
@@ -209,7 +209,7 @@ class HALSearcher(PaperSource):
             pass
         return ""
 
-    def _parse_doc(self, doc: Dict[str, Any]) -> Optional[Paper]:
+    def _parse_doc(self, doc: dict[str, Any]) -> Paper | None:
         """Convert a HAL Solr document dict into a :class:`Paper`."""
         try:
             hal_id = doc.get("halId_s", "")

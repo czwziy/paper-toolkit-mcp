@@ -10,13 +10,13 @@ API docs: https://developers.zenodo.org/
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 import requests
 
-from .base import PaperSource
-from ..paper import Paper
 from ..config import get_env
+from ..paper import Paper
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class ZenodoSearcher(PaperSource):
     BASE_URL = "https://zenodo.org/api"
     USER_AGENT = "paper-toolkit-mcp/0.1.3 (https://github.com/openags/paper-toolkit-mcp)"
 
-    def __init__(self, access_token: Optional[str] = None) -> None:
+    def __init__(self, access_token: str | None = None) -> None:
         self.access_token = access_token or get_env("ZENODO_ACCESS_TOKEN", "")
         self.session = requests.Session()
         self.session.headers.update(
@@ -52,7 +52,7 @@ class ZenodoSearcher(PaperSource):
     # PaperSource interface
     # ------------------------------------------------------------------
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """Search Zenodo records.
 
         Args:
@@ -70,7 +70,7 @@ class ZenodoSearcher(PaperSource):
         """
         max_results = max(1, min(max_results, 200))
 
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "q": query,
             "size": max_results,
             "sort": "mostrecent",
@@ -102,7 +102,7 @@ class ZenodoSearcher(PaperSource):
             logger.error("Zenodo search failed: %s", exc)
             return []
 
-        papers: List[Paper] = []
+        papers: list[Paper] = []
         for hit in data.get("hits", {}).get("hits", []):
             paper = self._parse_record(hit)
             if paper:
@@ -120,8 +120,8 @@ class ZenodoSearcher(PaperSource):
         Returns:
             Absolute path to the saved PDF, or an error message.
         """
-        import re
         import os
+        import re
 
         record_id = self._extract_record_id(paper_id)
         if not record_id:
@@ -210,7 +210,7 @@ class ZenodoSearcher(PaperSource):
             return paper_id
         return ""
 
-    def _find_pdf_url(self, record: Dict[str, Any]) -> str:
+    def _find_pdf_url(self, record: dict[str, Any]) -> str:
         """Return the best open-access PDF URL from a Zenodo record dict."""
         for f in record.get("files", []):
             key = f.get("key", "")
@@ -220,7 +220,7 @@ class ZenodoSearcher(PaperSource):
                 return links.get("self", "") or links.get("download", "")
         return ""
 
-    def _parse_record(self, hit: Dict[str, Any]) -> Optional[Paper]:
+    def _parse_record(self, hit: dict[str, Any]) -> Paper | None:
         """Convert a Zenodo API hit dict into a :class:`Paper`."""
         try:
             meta = hit.get("metadata", {})
