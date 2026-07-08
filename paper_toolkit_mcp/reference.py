@@ -684,24 +684,26 @@ def _get_paper_by_pmid(pmid: str, cache=None) -> dict | None:
         fetch_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={pmid}&retmode=xml"
         resp = requests.get(fetch_url, timeout=10)
         if resp.status_code == 200 and "<PubmedArticle>" in resp.text:
+            from xml.etree.ElementTree import Element  # nosec B405 - constructing placeholder, not parsing
+
             from defusedxml import ElementTree as ET
             root = ET.fromstring(resp.text)
             article = root.find(".//Article")
             if article is not None:
-                title = (article.find(".//ArticleTitle") or ET.Element("")).text or ""
+                title = (article.find(".//ArticleTitle") or Element("")).text or ""
                 authors = []
                 for author in article.findall(".//Author"):
-                    lastname = (author.find("LastName") or ET.Element("")).text or ""
-                    initials = (author.find("Initials") or ET.Element("")).text or ""
+                    lastname = (author.find("LastName") or Element("")).text or ""
+                    initials = (author.find("Initials") or Element("")).text or ""
                     if lastname:
                         authors.append(f"{lastname} {initials}".strip())
 
                 year_el = article.find(".//PubDate/Year")
                 year = year_el.text if year_el is not None else ""
 
-                journal = (article.find(".//Journal/Title") or ET.Element("")).text or ""
-                volume = (article.find(".//JournalIssue/Volume") or ET.Element("")).text or ""
-                issue = (article.find(".//JournalIssue/Issue") or ET.Element("")).text or ""
+                journal = (article.find(".//Journal/Title") or Element("")).text or ""
+                volume = (article.find(".//JournalIssue/Volume") or Element("")).text or ""
+                issue = (article.find(".//JournalIssue/Issue") or Element("")).text or ""
                 medline_paging = article.find(".//Pagination/MedlinePgn")
                 pages = medline_paging.text if medline_paging is not None else ""
 
@@ -743,25 +745,27 @@ def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict | None:
         url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200 and "<entry>" in resp.text:
+            from xml.etree.ElementTree import Element  # nosec B405 - constructing placeholder, not parsing
+
             from defusedxml import ElementTree as ET
             root = ET.fromstring(resp.xml if hasattr(resp, 'xml') else resp.text)
             ns = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 
             entry = root.find(".//atom:entry", ns)
             if entry is not None:
-                title = (entry.find("atom:title", ns) or ET.Element("")).text or ""
+                title = (entry.find("atom:title", ns) or Element("")).text or ""
                 title = re.sub(r'\s+', ' ', title).strip()
 
                 authors = []
                 for author in entry.findall("atom:author", ns):
-                    name = (author.find("atom:name", ns) or ET.Element("")).text or ""
+                    name = (author.find("atom:name", ns) or Element("")).text or ""
                     if name:
                         authors.append(name)
 
-                published = (entry.find("atom:published", ns) or ET.Element("")).text or ""
+                published = (entry.find("atom:published", ns) or Element("")).text or ""
                 year = published[:4] if published else ""
 
-                summary = (entry.find("atom:summary", ns) or ET.Element("")).text or ""
+                summary = (entry.find("atom:summary", ns) or Element("")).text or ""
 
                 paper = {
                     "title": title,

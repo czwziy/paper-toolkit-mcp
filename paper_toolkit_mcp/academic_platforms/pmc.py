@@ -1,4 +1,6 @@
 # paper_toolkit_mcp/academic_platforms/pmc.py
+from __future__ import annotations
+
 import logging
 import os
 from datetime import datetime

@@ -126,6 +126,11 @@ def _dedupe(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
 # land inside the user's project folder regardless of the process CWD.
 DEFAULT_SAVE_PATH = os.path.join(get_work_dir(), "downloads")
 
+# Default cache directory, resolved once at import from WORK_DIR (or CWD).
+# Passed explicitly to SearchCache so the cache module stays a pure leaf with
+# no dependency on config (per the layered architecture contract).
+DEFAULT_CACHE_DIR = os.path.join(get_work_dir(), ".paper_cache")
+
 async def _async_search(searcher: Any, query: str, max_results: int, **kwargs) -> list[dict]:
     if kwargs:
         papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, **kwargs)
@@ -249,7 +254,7 @@ async def cmd_manuscript(args: argparse.Namespace) -> int:
     with open(markdown_path, encoding="utf-8") as f:
         markdown_content = f.read()
 
-    cache = SearchCache(ttl_hours=args.cache_ttl)
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR, ttl_hours=args.cache_ttl)
     output_dir = args.output or os.path.dirname(markdown_path) or get_work_dir()
     os.makedirs(output_dir, exist_ok=True)
     base_name = os.path.splitext(os.path.basename(markdown_path))[0]
@@ -374,7 +379,7 @@ async def cmd_manuscript(args: argparse.Namespace) -> int:
 async def cmd_cache_list(args: argparse.Namespace) -> int:
     """List cached search results."""
     from .cache import SearchCache
-    cache = SearchCache()
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR)
     print(json.dumps({
         "stats": cache.get_stats(),
         "items": cache.list_cache(),
@@ -385,7 +390,7 @@ async def cmd_cache_list(args: argparse.Namespace) -> int:
 async def cmd_cache_clear(args: argparse.Namespace) -> int:
     """Clear all cached search results."""
     from .cache import SearchCache
-    cache = SearchCache()
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR)
     count = cache.clear()
     print(json.dumps({"status": "cleared", "entries_cleared": count}, indent=2))
     return 0

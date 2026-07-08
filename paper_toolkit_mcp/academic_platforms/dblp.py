@@ -1,4 +1,6 @@
 # paper_toolkit_mcp/academic_platforms/dblp.py
+from __future__ import annotations
+
 import logging
 import time
 from datetime import datetime

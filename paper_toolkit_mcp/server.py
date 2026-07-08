@@ -52,6 +52,11 @@ logger = logging.getLogger(__name__)
 # land inside the user's project folder regardless of the server process CWD.
 DEFAULT_SAVE_PATH = os.path.join(get_work_dir(), "downloads")
 
+# Default cache directory, resolved once at import from WORK_DIR (or CWD).
+# Passed explicitly to SearchCache so the cache module stays a pure leaf with
+# no dependency on config (per the layered architecture contract).
+DEFAULT_CACHE_DIR = os.path.join(get_work_dir(), ".paper_cache")
+
 # Instances of searchers
 arxiv_searcher = ArxivSearcher()
 pubmed_searcher = PubMedSearcher()
@@ -1430,7 +1435,7 @@ async def process_manuscript(
     """
     from .reference import get_paper_by_identifier
 
-    cache = SearchCache(ttl_hours=cache_ttl_hours)
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR, ttl_hours=cache_ttl_hours)
 
     if not os.path.exists(markdown_path):
         return {"error": f"File not found: {markdown_path}"}
@@ -1584,7 +1589,7 @@ async def get_paper_metadata(
     """
     from .reference import get_paper_by_identifier
 
-    cache = SearchCache(ttl_hours=cache_ttl_hours)
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR, ttl_hours=cache_ttl_hours)
 
     parts = identifier.split(":", 1)
     if len(parts) != 2:
@@ -1625,7 +1630,7 @@ async def export_references(
     """
     from .reference import get_paper_by_identifier
 
-    cache = SearchCache(ttl_hours=cache_ttl_hours)
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR, ttl_hours=cache_ttl_hours)
     papers = []
 
     for identifier in identifiers:
@@ -1670,7 +1675,7 @@ async def cache_list() -> dict[str, Any]:
     Returns:
         Dict with cache statistics and list of cached items.
     """
-    cache = SearchCache()
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR)
     return {
         "stats": cache.get_stats(),
         "items": cache.list_cache(),
@@ -1684,7 +1689,7 @@ async def cache_clear() -> dict[str, Any]:
     Returns:
         Dict with number of cleared entries.
     """
-    cache = SearchCache()
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR)
     count = cache.clear()
     return {
         "status": "cleared",
