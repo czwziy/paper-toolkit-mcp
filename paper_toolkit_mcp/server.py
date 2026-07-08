@@ -1329,6 +1329,7 @@ if ieee_searcher is not None:
         Returns:
             str: Path to saved PDF or error message.
         """
+        assert ieee_searcher is not None
         return await asyncio.to_thread(ieee_searcher.download_pdf, paper_id, save_path)
 
     @mcp.tool()
@@ -1341,6 +1342,7 @@ if ieee_searcher is not None:
         Returns:
             str: Extracted text content.
         """
+        assert ieee_searcher is not None
         return ieee_searcher.read_paper(paper_id, save_path)
 
 
@@ -1370,6 +1372,7 @@ if acm_searcher is not None:
         Returns:
             str: Path to saved PDF or error message.
         """
+        assert acm_searcher is not None
         return await asyncio.to_thread(acm_searcher.download_pdf, paper_id, save_path)
 
     @mcp.tool()
@@ -1382,6 +1385,7 @@ if acm_searcher is not None:
         Returns:
             str: Extracted text content.
         """
+        assert acm_searcher is not None
         return acm_searcher.read_paper(paper_id, save_path)
 
 
@@ -1424,8 +1428,8 @@ async def process_manuscript(
         citation_style: Citation style for reference list (gb7714, apa, ieee).
         output_dir: Output directory (default: same as input file).
         generate_docx: Whether to generate Word document via pandoc.
-        generate_bibtex: Whether to generate BibTeX file.
-        generate_ris: Whether to generate RIS file for Zotero import.
+        include_bibtex: Whether to generate BibTeX file.
+        include_ris: Whether to generate RIS file for Zotero import.
         cache_ttl_hours: Cache TTL in hours for search results.
 
     Returns:
@@ -1507,14 +1511,14 @@ async def process_manuscript(
             f.write(f"## References\n\n{ref_list}")
         output_files["reference_list"] = ref_list_path
 
-        if generate_bibtex:
+        if include_bibtex:
             bib_content = generate_bibtex(papers)
             bib_path = os.path.join(output_dir, "refs.bib")
             with open(bib_path, "w", encoding="utf-8") as f:
                 f.write(bib_content)
             output_files["bibtex"] = bib_path
 
-        if generate_ris:
+        if include_ris:
             ris_content = generate_ris(papers)
             ris_path = os.path.join(output_dir, "refs.ris")
             with open(ris_path, "w", encoding="utf-8") as f:

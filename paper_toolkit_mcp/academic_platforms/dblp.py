@@ -124,8 +124,6 @@ class DBLPSearcher(PaperSource):
             logger.error(f"Unexpected error in dblp search: {e}")
             return self._search_html_fallback(query=query, max_results=max_results)
 
-        return papers
-
     def _search_html_fallback(self, query: str, max_results: int) -> list[Paper]:
         """Fallback search via dblp HTML endpoint when API is unavailable."""
         papers: list[Paper] = []
