@@ -23,10 +23,10 @@ paper-toolkit-mcp 是一个 MCP 工具包，用于学术论文搜索、手稿处
 
 ```bash
 # 一次性安装开发依赖（lint / 类型 / 测试 / 架构 / 安全）
-uv pip install --system -e ".[dev]"
+pip install -e ".[dev]"
 
 # 风格检查（ruff）
-ruff check paper_toolkit_mcp tests
+ruff check paper_toolkit_mcp tests/unit
 
 # 类型检查（mypy）
 mypy paper_toolkit_mcp
@@ -47,7 +47,7 @@ pytest tests/integration/
 bandit -r paper_toolkit_mcp -c .harness/constraints/security/bandit.yaml -q
 
 # 完整验证门（CI 等价命令）
-ruff check paper_toolkit_mcp tests \
+ruff check paper_toolkit_mcp tests/unit \
   && mypy paper_toolkit_mcp \
   && lint-imports \
   && pytest \

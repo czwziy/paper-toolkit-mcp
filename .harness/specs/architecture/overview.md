@@ -56,7 +56,6 @@ Markdown 源文件
 ## 部署拓扑
 
 - **PyPI 包**：`pip install paper-toolkit-mcp` → 提供 `paper-toolkit-mcp` 命令
-- **Docker**：`Dockerfile` 多阶段构建，`python:3.12-slim` 基础镜像
 - **配置**：`.env` 文件（gitignored）或运行时环境变量
 - **可选 API key**：Semantic Scholar / CORE / Unpaywall / DOAJ / Zenodo / IEEE / ACM / OpenAIRE / CiteSeerX（无 key 也可用，仅影响特定源覆盖率）
 

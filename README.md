@@ -143,11 +143,8 @@ paper-toolkit sources
 - [Source Strategy](#source-strategy)
 - [Sci-Hub Notice](#sci-hub-notice)
 - [Installation](#installation)
-  - [Method 1 — Local Deployment (Clone & Run)](#method-1--local-deployment-clone--run-recommended)
-  - [Method 2 — Smithery](#method-2--smithery-one-command-recommended-for-claude-desktop)
-  - [Method 3 — uvx](#method-3--uvx-no-install-always-latest)
-  - [Method 4 — uv](#method-4--uv-persistent-install)
-  - [Method 5 — pip](#method-5--pip-standard-python-install)
+  - [Install from PyPI (pip)](#install-from-pypi-pip)
+  - [Install from Source (Development)](#install-from-source-development)
   - [Environment Variables](#environment-variables-env-file)
 - [Manuscript Processing](#manuscript-processing-new)
 - [Search Caching](#search-caching-new)
@@ -371,147 +368,21 @@ Choose the method that best fits your workflow. All methods support the same [op
 
 ---
 
-### Method 1 — Local Deployment (Clone & Run) — Recommended
+### Install from PyPI (pip)
 
-This is the most reliable method — you have full control and can customize the installation.
-
-```bash
-# 1. Clone your forked repo
-git clone https://github.com/YOUR_USERNAME/paper-toolkit-mcp.git
-cd paper-toolkit-mcp
-
-# 2. Install dependencies (using uv, recommended)
-# Install uv if you don't have it: https://docs.astral.sh/uv/getting-started/installation/
-uv venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
-uv pip install -e ".[dev]"
-
-# 3. Verify it works
-uv run -m paper_toolkit_mcp.server
-# or
-paper-toolkit search "machine learning" -s arxiv,semantic
-```
-
-**Claude Desktop / Trae IDE config** (replace the path with your actual clone location):
-
-```json
-{
-  "mcpServers": {
-    "paper-toolkit-mcp": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory", "D:/Codes/paper-toolkit-mcp",
-        "-m", "paper_toolkit_mcp.server"
-      ],
-      "env": {
-        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
-        "paper_toolkit_mcp_CORE_API_KEY": "",
-        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": ""
-      }
-    }
-  }
-}
-```
-
-**For Trae IDE** on Windows, edit the MCP settings file at the location shown in Trae's settings UI, or use the `python -m` method:
-
-```json
-{
-  "mcpServers": {
-    "paper-toolkit-mcp": {
-      "command": "python",
-      "args": ["-m", "paper_toolkit_mcp.server"]
-    }
-  }
-}
-```
-
-Make sure to run this from your project directory, or set the `cwd` appropriately.
-
----
-
-### Method 1 — Smithery (one-command, recommended for Claude Desktop)
-
-```bash
-npx -y @smithery/cli install @openags/paper-toolkit-mcp --client claude
-```
-
-Smithery automatically writes the correct config block for you. No manual JSON editing needed.
-
----
-
-### Method 2 — `uvx` (no install, always latest)
-
-`uvx` runs the package directly from PyPI without a permanent install. Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
-
-```bash
-# Install uv (skip if already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-> ⚠️ **macOS note**: `uvx` generated wrapper scripts rely on `realpath`, which is not included in macOS by default. If you see a `realpath: command not found` error, either install GNU coreutils (`brew install coreutils`) or use **Method 3 (`uv run`)** instead — it does not have this limitation.
-
-**Claude Desktop config:**
-
-```json
-{
-  "mcpServers": {
-    "paper-toolkit-mcp": {
-      "command": "uvx",
-      "args": ["paper-toolkit-mcp"],
-      "env": {
-        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
-        "paper_toolkit_mcp_CORE_API_KEY": "",
-        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": "",
-        "paper_toolkit_mcp_ZENODO_ACCESS_TOKEN": "",
-        "paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL": "",
-        "paper_toolkit_mcp_IEEE_API_KEY": "",
-        "paper_toolkit_mcp_ACM_API_KEY": ""
-      }
-    }
-  }
-}
-```
-
----
-
-### Method 3 — `uv` (persistent install)
-
-```bash
-uv tool install paper-toolkit-mcp
-```
-
-**Claude Desktop config:**
-
-```json
-{
-  "mcpServers": {
-    "paper-toolkit-mcp": {
-      "command": "uv",
-      "args": ["tool", "run", "paper-toolkit-mcp"],
-      "env": {
-        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
-        "paper_toolkit_mcp_CORE_API_KEY": "",
-        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": "",
-        "paper_toolkit_mcp_ZENODO_ACCESS_TOKEN": "",
-        "paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL": "",
-        "paper_toolkit_mcp_IEEE_API_KEY": "",
-        "paper_toolkit_mcp_ACM_API_KEY": ""
-      }
-    }
-  }
-}
-```
-
----
-
-### Method 4 — `pip` (standard Python install)
+The recommended way to install is from PyPI:
 
 ```bash
 pip install paper-toolkit-mcp
 ```
 
-**Claude Desktop config:**
+Verify it works:
+
+```bash
+paper-toolkit search "machine learning" -s arxiv,semantic
+```
+
+**Claude Desktop / Trae IDE config:**
 
 ```json
 {
@@ -537,20 +408,33 @@ pip install paper-toolkit-mcp
 
 ---
 
-### Method 5 — `npx` (via Smithery CLI, no local Python needed)
+### Install from Source (Development)
+
+For development or customization, clone the repo and install in editable mode:
 
 ```bash
-npx -y @smithery/cli run @openags/paper-toolkit-mcp
+# 1. Clone your forked repo
+git clone https://github.com/YOUR_USERNAME/paper-toolkit-mcp.git
+cd paper-toolkit-mcp
+
+# 2. Create a virtual environment and install
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+
+# 3. Verify it works
+python -m paper_toolkit_mcp.server
+# or
+paper-toolkit search "machine learning" -s arxiv,semantic
 ```
 
-**Claude Desktop config:**
+**Claude Desktop / Trae IDE config** (replace the path with your actual clone location):
 
 ```json
 {
   "mcpServers": {
     "paper-toolkit-mcp": {
-      "command": "npx",
-      "args": ["-y", "@smithery/cli", "run", "@openags/paper-toolkit-mcp"],
+      "command": "python",
+      "args": ["-m", "paper_toolkit_mcp.server"],
       "env": {
         "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
         "paper_toolkit_mcp_CORE_API_KEY": "",
@@ -561,98 +445,7 @@ npx -y @smithery/cli run @openags/paper-toolkit-mcp
 }
 ```
 
----
-
-### Method 6 — Docker
-
-```bash
-docker build -t paper-toolkit-mcp .
-docker run --rm -i \
-  -e paper_toolkit_mcp_UNPAYWALL_EMAIL=your@email.com \
-  -e paper_toolkit_mcp_CORE_API_KEY=your_core_key \
-  paper-toolkit-mcp
-```
-
-**Claude Desktop config:**
-
-```json
-{
-  "mcpServers": {
-    "paper-toolkit-mcp": {
-      "command": "docker",
-      "args": ["run", "--rm", "-i", "paper-toolkit-mcp"],
-      "env": {
-        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
-        "paper_toolkit_mcp_CORE_API_KEY": "",
-        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": "",
-        "paper_toolkit_mcp_ZENODO_ACCESS_TOKEN": "",
-        "paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL": "",
-        "paper_toolkit_mcp_IEEE_API_KEY": "",
-        "paper_toolkit_mcp_ACM_API_KEY": ""
-      }
-    }
-  }
-}
-```
-
----
-
-### Method 7 — Clone & run from source (development / recommended for macOS local)
-
-This is the most reliable method on macOS — no wrapper scripts, no `realpath` issues.
-
-```bash
-# 1. Install uv (skip if already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 2. Clone repo
-git clone https://github.com/openags/paper-toolkit-mcp.git
-cd paper-toolkit-mcp
-
-# 3. Verify it runs (uv auto-resolves dependencies, no manual install needed)
-uv run -m paper_toolkit_mcp.server
-```
-
-**Claude Desktop config** (replace the directory path with your actual clone location):
-
-```json
-{
-  "mcpServers": {
-    "paper-toolkit-mcp": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory", "/path/to/paper-toolkit-mcp",
-        "-m", "paper_toolkit_mcp.server"
-      ],
-      "env": {
-        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
-        "paper_toolkit_mcp_CORE_API_KEY": "",
-        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": "",
-        "paper_toolkit_mcp_ZENODO_ACCESS_TOKEN": "",
-        "paper_toolkit_mcp_GOOGLE_SCHOLAR_PROXY_URL": "",
-        "paper_toolkit_mcp_IEEE_API_KEY": "",
-        "paper_toolkit_mcp_ACM_API_KEY": ""
-      }
-    }
-  }
-}
-```
-
-For example, if you cloned to `/Users/mac/Pengsong/paper-toolkit-mcp`:
-
-```json
-"args": ["run", "--directory", "/Users/mac/Pengsong/paper-toolkit-mcp", "-m", "paper_toolkit_mcp.server"]
-```
-
-> `uv run` automatically installs dependencies into an isolated environment on first run — no `pip install` or `venv` needed.
-
-For active development, optionally install an editable copy:
-
-```bash
-uv venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-uv pip install -e ".[dev]"
-```
+Run from your project directory, or set the `cwd` appropriately so the `.env` file and `.paper_cache/` resolve relative to the project root.
 
 ---
 
@@ -693,8 +486,8 @@ We welcome contributions! Here's how to get started:
    ```bash
    git clone https://github.com/yourusername/paper-toolkit-mcp.git
    cd paper-toolkit-mcp
-   uv venv && source .venv/bin/activate
-   uv pip install -e ".[dev]"
+   python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+   pip install -e ".[dev]"
    ```
 
 3. **Make Changes**:
