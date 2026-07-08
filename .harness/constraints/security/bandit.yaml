@@ -12,17 +12,30 @@ exclude_dirs:
 
 # 跳过的规则（带原因）
 # 以下规则经评估后确认可接受跳过（非 TODO，已审查）
+# 注意：skips 列表项的行内注释会被 bandit 当作 test 名解析，故原因说明仅用
+# 规则编号 + 简短中文，详细理由见下方"skip 理由详解"段。
 skips:
-  - B101    # assert_used — 工具中 assert 用于不变量检查，可接受
-  - B112    # try_except_continue — 多 parser/格式尝试-跳过模式（openaire/pubmed），可接受
-  - B311    # blacklist/random — random.choice 用于选 User-Agent，非 crypto 场景，可接受
-  - B404    # blacklist/subprocess — pandoc_helper.py 合法调用 pandoc
-  - B603    # subprocess_without_shell_equals_true — pandoc_helper 用 shell=False 安全调用
-  - B607    # partial_process_path — pandoc 路径经 shutil.which 解析，非硬编码
+  - B101    # 测试中允许 assert
+  - B112    # 多 parser 尝试-跳过模式
+  - B311    # random.choice 选 UA，非密码学场景
+  - B404    # pandoc_helper 合法调用 pandoc
+  - B603    # pandoc_helper 用 shell=False 安全调用
+  - B607    # pandoc 路径经 shutil.which 解析
+  - B405    # 仅用 Element 构造占位节点，非解析
+
+# skip 理由详解（bandit 不解析此段，仅供人类与 AI 阅读）：
+#   B101 assert_used      — 工具中 assert 用于不变量检查，可接受
+#   B112 try_except_continue — 多 parser/格式尝试-跳过模式（openaire/pubmed），可接受
+#   B311 blacklist/random — random.choice 用于选 User-Agent，非 crypto 场景，可接受
+#   B404 blacklist/subprocess — pandoc_helper.py 合法调用 pandoc
+#   B603 subprocess_without_shell_equals_true — pandoc_helper 用 shell=False 安全调用
+#   B607 partial_process_path — pandoc 路径经 shutil.which 解析，非硬编码
+#   B405 blacklist/xml.etree — reference.py 仅用 xml.etree.ElementTree.Element 构造
+#           占位节点（非解析不可信 XML，无 XXE 风险）；所有 XML 解析均已用 defusedxml
 
 # 已修复（从 skips 移除）：
 #   B108 hardcoded_tmp_directory — 改用 tempfile.gettempdir()
 #   B110 try_except_pass — 改为 except Exception as e + logger.warning
 #   B113 request_without_timeout — arxiv.py download_pdf 加 timeout=30
-#   B314/B405 xml.etree — 全部迁移到 defusedxml（防 XXE）
+#   B314 xml.etree 解析 — 全部迁移到 defusedxml（防 XXE）；仅元素构造仍用 xml.etree（无安全风险）
 #   B324 hashlib md5 — 加 usedforsecurity=False 参数

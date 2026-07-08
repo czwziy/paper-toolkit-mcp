@@ -129,7 +129,10 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests/unit"]
-addopts = "-q --strict-markers"
+# coverage 门禁内化为 pytest 默认行为：任何 pytest 调用（本地 + CI）都自动
+# 启用覆盖率收集与 fail-under 检查，避免门禁形同虚设（harness 4.6 双重保障）。
+# 阈值与 [tool.coverage.report] fail_under 保持一致，单一真相源。
+addopts = "-q --strict-markers --cov=paper_toolkit_mcp --cov-report=term-missing --cov-fail-under=20"
 markers = [
     "integration: tests requiring network access; NOT run in CI default",
 ]
