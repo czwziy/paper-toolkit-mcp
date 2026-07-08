@@ -8,8 +8,10 @@ Supports:
 - GB/T 7714-2015, APA 7th edition, and IEEE citation styles
 """
 
+import logging
 import re
-from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 def parse_citation_placeholders(text: str) -> list[dict]:
@@ -207,7 +209,7 @@ def generate_ris(papers: list[dict]) -> str:
 
 def _normalize_authors(authors) -> list[str]:
     """Normalize authors input to a list of individual author name strings.
-    
+
     Handles both list of strings and comma-separated string formats.
     """
     if isinstance(authors, str):
@@ -568,42 +570,42 @@ def process_manuscript(
 
 def process_manuscript_text(text: str, papers: list[dict], style: str = "gb7714") -> dict:
     """Process manuscript text by replacing citation placeholders with numbered citations.
-    
+
     This is a simplified version that replaces placeholders with [1], [2], etc.
     based on paper order, and appends the reference list at the end.
-    
+
     Args:
         text: The manuscript text containing citation placeholders.
         papers: A list of dicts, each representing a paper with 'citation_key'.
         style: Citation style for reference list.
-    
+
     Returns:
         Dict with 'formatted_text' key containing the processed text.
     """
     placeholders = parse_citation_placeholders(text)
     processed_text = text
-    
+
     paper_lookup = {}
     for idx, paper in enumerate(papers, start=1):
         citation_key = paper.get("citation_key", "")
         if citation_key:
             paper_lookup[citation_key] = idx
-    
+
     used_citations = {}
     for ph in placeholders:
         ph_key = f"{ph['type']}:{ph['identifier']}"
         ph_full = ph["full_match"]
-        
+
         if ph_key in paper_lookup and ph_key not in used_citations:
             used_citations[ph_key] = paper_lookup[ph_key]
-        
+
         if ph_key in used_citations:
             replacement = f"[{used_citations[ph_key]}]"
             processed_text = processed_text.replace(ph_full, replacement, 1)
-    
+
     ref_list = generate_reference_list(papers, style)
     processed_text += f"\n\n## References\n\n{ref_list}"
-    
+
     return {"formatted_text": processed_text}
 
 
@@ -611,14 +613,14 @@ def get_paper_by_identifier(
     id_type: str,
     identifier: str,
     cache=None,
-) -> dict:
+) -> dict | None:
     """Get paper metadata by identifier type and value.
-    
+
     Args:
         id_type: One of 'doi', 'pmid', 'arxiv', 'title'.
         identifier: The identifier value.
         cache: Optional SearchCache instance.
-    
+
     Returns:
         Dict with paper metadata, or None if not found.
     """
@@ -634,15 +636,15 @@ def get_paper_by_identifier(
         return None
 
 
-def _get_paper_by_doi(doi: str, cache=None) -> dict:
+def _get_paper_by_doi(doi: str, cache=None) -> dict | None:
     """Get paper by DOI using CrossRef API."""
     import requests
-    
+
     if cache:
         cached = cache.get(doi, "crossref")
         if cached:
             return cached[0] if cached else None
-    
+
     try:
         url = f"https://api.crossref.org/works/{doi}"
         resp = requests.get(url, timeout=10)
@@ -664,48 +666,50 @@ def _get_paper_by_doi(doi: str, cache=None) -> dict:
             if cache:
                 cache.set(doi, "crossref", [paper])
             return paper
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch paper metadata: {e}")
     return None
 
 
-def _get_paper_by_pmid(pmid: str, cache=None) -> dict:
+def _get_paper_by_pmid(pmid: str, cache=None) -> dict | None:
     """Get paper by PMID using Entrez API."""
     import requests
-    
+
     if cache:
         cached = cache.get(pmid, "pubmed")
         if cached:
             return cached[0] if cached else None
-    
+
     try:
         fetch_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={pmid}&retmode=xml"
         resp = requests.get(fetch_url, timeout=10)
         if resp.status_code == 200 and "<PubmedArticle>" in resp.text:
-            from xml.etree import ElementTree as ET
+            from xml.etree.ElementTree import Element  # nosec B405 - constructing placeholder, not parsing
+
+            from defusedxml import ElementTree as ET
             root = ET.fromstring(resp.text)
             article = root.find(".//Article")
             if article is not None:
-                title = (article.find(".//ArticleTitle") or ET.Element("")).text or ""
+                title = (article.find(".//ArticleTitle") or Element("")).text or ""
                 authors = []
                 for author in article.findall(".//Author"):
-                    lastname = (author.find("LastName") or ET.Element("")).text or ""
-                    initials = (author.find("Initials") or ET.Element("")).text or ""
+                    lastname = (author.find("LastName") or Element("")).text or ""
+                    initials = (author.find("Initials") or Element("")).text or ""
                     if lastname:
                         authors.append(f"{lastname} {initials}".strip())
-                
+
                 year_el = article.find(".//PubDate/Year")
                 year = year_el.text if year_el is not None else ""
-                
-                journal = (article.find(".//Journal/Title") or ET.Element("")).text or ""
-                volume = (article.find(".//JournalIssue/Volume") or ET.Element("")).text or ""
-                issue = (article.find(".//JournalIssue/Issue") or ET.Element("")).text or ""
+
+                journal = (article.find(".//Journal/Title") or Element("")).text or ""
+                volume = (article.find(".//JournalIssue/Volume") or Element("")).text or ""
+                issue = (article.find(".//JournalIssue/Issue") or Element("")).text or ""
                 medline_paging = article.find(".//Pagination/MedlinePgn")
                 pages = medline_paging.text if medline_paging is not None else ""
-                
+
                 dois = article.findall(".//ArticleId[@IdType='doi']")
                 doi = dois[0].text if dois else ""
-                
+
                 paper = {
                     "title": title,
                     "authors": authors,
@@ -721,45 +725,48 @@ def _get_paper_by_pmid(pmid: str, cache=None) -> dict:
                 if cache:
                     cache.set(pmid, "pubmed", [paper])
                 return paper
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch paper metadata: {e}")
     return None
 
 
-def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict:
+def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict | None:
     """Get paper by arXiv ID."""
-    import requests
     import re
-    
+
+    import requests
+
     if cache:
         cached = cache.get(arxiv_id, "arxiv")
         if cached:
             return cached[0] if cached else None
-    
+
     try:
         url = f"http://export.arxiv.org/api/query?id_list={arxiv_id}"
         resp = requests.get(url, timeout=10)
         if resp.status_code == 200 and "<entry>" in resp.text:
-            from xml.etree import ElementTree as ET
+            from xml.etree.ElementTree import Element  # nosec B405 - constructing placeholder, not parsing
+
+            from defusedxml import ElementTree as ET
             root = ET.fromstring(resp.xml if hasattr(resp, 'xml') else resp.text)
             ns = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
-            
+
             entry = root.find(".//atom:entry", ns)
             if entry is not None:
-                title = (entry.find("atom:title", ns) or ET.Element("")).text or ""
+                title = (entry.find("atom:title", ns) or Element("")).text or ""
                 title = re.sub(r'\s+', ' ', title).strip()
-                
+
                 authors = []
                 for author in entry.findall("atom:author", ns):
-                    name = (author.find("atom:name", ns) or ET.Element("")).text or ""
+                    name = (author.find("atom:name", ns) or Element("")).text or ""
                     if name:
                         authors.append(name)
-                
-                published = (entry.find("atom:published", ns) or ET.Element("")).text or ""
+
+                published = (entry.find("atom:published", ns) or Element("")).text or ""
                 year = published[:4] if published else ""
-                
-                summary = (entry.find("atom:summary", ns) or ET.Element("")).text or ""
-                
+
+                summary = (entry.find("atom:summary", ns) or Element("")).text or ""
+
                 paper = {
                     "title": title,
                     "authors": authors,
@@ -773,23 +780,23 @@ def _get_paper_by_arxiv(arxiv_id: str, cache=None) -> dict:
                 if cache:
                     cache.set(arxiv_id, "arxiv", [paper])
                 return paper
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch paper metadata: {e}")
     return None
 
 
-def _get_paper_by_title(title: str, cache=None) -> dict:
+def _get_paper_by_title(title: str, cache=None) -> dict | None:
     """Get paper by title using CrossRef search."""
     import requests
-    
+
     if cache:
         cached = cache.get(title, "crossref", search_type="title")
         if cached:
             return cached[0] if cached else None
-    
+
     try:
         url = "https://api.crossref.org/works"
-        params = {"query.title": title, "rows": 1}
+        params: dict[str, str | int] = {"query.title": title, "rows": 1}
         resp = requests.get(url, params=params, timeout=10)
         if resp.status_code == 200:
             items = resp.json()["message"].get("items", [])
@@ -812,8 +819,8 @@ def _get_paper_by_title(title: str, cache=None) -> dict:
                 if cache:
                     cache.set(title, "crossref", [paper], search_type="title")
                 return paper
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to fetch paper metadata: {e}")
     return None
 
 

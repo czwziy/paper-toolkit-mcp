@@ -111,55 +111,52 @@ paper-toolkit manuscript draft.md -s gb7714 --docx
 
 ## 本地部署
 
-### 推荐方式：克隆并运行
+### 推荐方式：pip 安装
+
+```bash
+# 从 PyPI 安装
+pip install paper-toolkit-mcp
+
+# 验证运行
+paper-toolkit search "machine learning" -s arxiv,semantic
+```
+
+### 从源码安装（开发模式）
 
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/YOUR_USERNAME/paper-toolkit-mcp.git
 cd paper-toolkit-mcp
 
-# 2. 安装依赖（推荐用 uv）
-# 安装 uv: https://docs.astral.sh/uv/getting-started/installation/
-uv venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
-uv pip install -e ".[dev]"
+# 2. 创建虚拟环境并安装
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
 
 # 3. 验证运行
-uv run -m paper_toolkit_mcp.server
+python -m paper_toolkit_mcp.server
 # 或者
 paper-toolkit search "machine learning" -s arxiv,semantic
 ```
 
 ### Trae IDE / Claude Desktop 配置
 
-**方法 1：使用 uv（推荐）**
-
-```json
-{
-  "mcpServers": {
-    "paper-toolkit-mcp": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory", "D:/Codes/paper-toolkit-mcp",
-        "-m", "paper_toolkit_mcp.server"
-      ]
-    }
-  }
-}
-```
-
-**方法 2：使用 python**
-
 ```json
 {
   "mcpServers": {
     "paper-toolkit-mcp": {
       "command": "python",
-      "args": ["-m", "paper_toolkit_mcp.server"]
+      "args": ["-m", "paper_toolkit_mcp.server"],
+      "env": {
+        "paper_toolkit_mcp_UNPAYWALL_EMAIL": "your@email.com",
+        "paper_toolkit_mcp_CORE_API_KEY": "",
+        "paper_toolkit_mcp_SEMANTIC_SCHOLAR_API_KEY": ""
+      }
     }
   }
 }
 ```
+
+> 若 `python` 不在 PATH 中，替换为完整路径（如 `/usr/bin/python3` 或 `C:\Python311\python.exe`）。
 
 **配置文件位置**：
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -311,8 +308,8 @@ paper_toolkit_mcp_IEEE_API_KEY=                      # 启用 IEEE Xplore
    ```bash
    git clone https://github.com/yourusername/paper-toolkit-mcp.git
    cd paper-toolkit-mcp
-   uv venv && source .venv/bin/activate
-   uv pip install -e ".[dev]"
+   python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+   pip install -e ".[dev]"
    ```
 3. **进行修改**：
    - 在 `academic_platforms/` 中添加新平台

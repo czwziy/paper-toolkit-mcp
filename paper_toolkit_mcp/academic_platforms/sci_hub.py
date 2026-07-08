@@ -2,11 +2,10 @@
 
 Simple wrapper adapted from scihub.py for downloading PDFs via Sci-Hub.
 """
-from pathlib import Path
-import re
 import hashlib
 import logging
-from typing import Optional
+import re
+from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
@@ -21,7 +20,7 @@ class SciHubFetcher:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.session = requests.Session()
-        self.session.headers = {
+        self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
@@ -29,9 +28,9 @@ class SciHubFetcher:
             'DNT': '1',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
-        }
+        })
 
-    def download_pdf(self, identifier: str) -> Optional[str]:
+    def download_pdf(self, identifier: str) -> str | None:
         """Download a PDF from Sci-Hub using a DOI, PMID, or URL.
 
         Args:
@@ -52,7 +51,7 @@ class SciHubFetcher:
 
             # Download the PDF
             response = self.session.get(pdf_url, verify=False, timeout=30)
-            
+
             if response.status_code != 200:
                 logging.error(f"Failed to download PDF, status {response.status_code}")
                 return None
@@ -64,17 +63,17 @@ class SciHubFetcher:
             # Generate filename and save
             filename = self._generate_filename(response, identifier)
             file_path = self.output_dir / filename
-            
+
             with open(file_path, 'wb') as f:
                 f.write(response.content)
-                
+
             return str(file_path)
 
         except Exception as e:
             logging.error(f"Error downloading PDF for {identifier}: {e}")
             return None
 
-    def _get_direct_url(self, identifier: str) -> Optional[str]:
+    def _get_direct_url(self, identifier: str) -> str | None:
         """Get the direct PDF URL from Sci-Hub."""
         try:
             # If it's already a direct PDF URL, return it
@@ -84,12 +83,12 @@ class SciHubFetcher:
             # Search on Sci-Hub
             search_url = f"{self.base_url}/{identifier}"
             response = self.session.get(search_url, verify=False, timeout=20)
-            
+
             if response.status_code != 200:
                 return None
 
             soup = BeautifulSoup(response.content, 'html.parser')
-            
+
             # Check for article not found
             if "article not found" in response.text.lower():
                 logging.warning("Article not found on Sci-Hub")
@@ -168,11 +167,11 @@ class SciHubFetcher:
             name = re.sub(r'#view=(.+)', '', name)
             if name.endswith('.pdf'):
                 # Generate hash for uniqueness
-                pdf_hash = hashlib.md5(response.content).hexdigest()[:8]
+                pdf_hash = hashlib.md5(response.content, usedforsecurity=False).hexdigest()[:8]
                 base_name = name[:-4]  # Remove .pdf
                 return f"{pdf_hash}_{base_name}.pdf"
 
         # Fallback: use identifier
         clean_identifier = re.sub(r'[^\w\-_.]', '_', identifier)
-        pdf_hash = hashlib.md5(response.content).hexdigest()[:8]
+        pdf_hash = hashlib.md5(response.content, usedforsecurity=False).hexdigest()[:8]
         return f"{pdf_hash}_{clean_identifier}.pdf"

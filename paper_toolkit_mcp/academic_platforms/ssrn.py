@@ -18,17 +18,18 @@ Legal/compliance note:
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
-import os
-from typing import List, Optional, Any, Tuple
+from datetime import datetime
+from typing import Any
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 
-from .base import PaperSource
 from ..paper import Paper
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ class SSRNSearcher(PaperSource):
     # PaperSource interface
     # ------------------------------------------------------------------
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """Search SSRN and return metadata records.
 
         Args:
@@ -80,7 +81,7 @@ class SSRNSearcher(PaperSource):
         Returns:
             List of :class:`~paper_toolkit_mcp.paper.Paper` objects.
         """
-        papers: List[Paper] = []
+        papers: list[Paper] = []
         page = 1
         per_page = 15  # SSRN default
 
@@ -195,13 +196,13 @@ class SSRNSearcher(PaperSource):
             time.sleep(self._RATE_LIMIT_SECONDS - elapsed)
         self._last_request_time = time.monotonic()
 
-    def _fetch_page(self, query: str, page: int) -> Tuple[str, str]:
+    def _fetch_page(self, query: str, page: int) -> tuple[str, str]:
         """Fetch one page of SSRN search results.
 
         Returns:
             (html_text, error_message) — one of them will be empty.
         """
-        attempts = [
+        attempts: list[tuple[str, dict[str, str | int]]] = [
             (self.SEARCH_URL, {"txtSearchTerm": query, "npage": page}),
             (self.ALT_SEARCH_URL, {"txtKeywords": query, "page": page}),
         ]
@@ -271,7 +272,7 @@ class SSRNSearcher(PaperSource):
 
         for selector in link_candidates:
             for anchor in soup.select(selector):
-                href = (anchor.get("href") or "").strip()
+                href = (str(anchor.get("href") or "")).strip()
                 if not href:
                     continue
 
@@ -281,10 +282,10 @@ class SSRNSearcher(PaperSource):
 
         return ""
 
-    def _parse_results(self, html: str) -> List[Paper]:
+    def _parse_results(self, html: str) -> list[Paper]:
         """Parse SSRN search-results HTML into Paper objects."""
         soup = BeautifulSoup(html, "html.parser")
-        papers: List[Paper] = []
+        papers: list[Paper] = []
 
         # SSRN result items are typically in <div class="title"> / <div class="authors"> etc.
         # The structure may shift with site updates; we use heuristic selectors.
@@ -302,7 +303,7 @@ class SSRNSearcher(PaperSource):
 
         return papers
 
-    def _parse_block(self, block: Any) -> Optional[Paper]:
+    def _parse_block(self, block: Any) -> Paper | None:
         """Extract a single paper from an SSRN result block element."""
         try:
             # Title
@@ -335,7 +336,8 @@ class SSRNSearcher(PaperSource):
                 or block.select_one("span.author-name")
                 or block.select_one(".srp-authors")
             )
-            authors = authors_tag.get_text(separator=", ", strip=True) if authors_tag else ""
+            authors = authors_tag.get_text(separator=", ", strip=True).split(", ") if authors_tag else []
+            authors = [a for a in authors if a]
 
             # Abstract
             abstract_tag = (
@@ -347,7 +349,15 @@ class SSRNSearcher(PaperSource):
 
             # Date
             date_tag = block.select_one(".date") or block.select_one("span.date") or block.select_one(".srp-date")
-            pub_date = date_tag.get_text(strip=True) if date_tag else ""
+            pub_date_str = date_tag.get_text(strip=True) if date_tag else ""
+            pub_date: datetime | None = None
+            if pub_date_str:
+                for fmt in ("%Y-%m-%d", "%B %Y", "%Y", "%b %Y", "%d %B %Y"):
+                    try:
+                        pub_date = datetime.strptime(pub_date_str, fmt)
+                        break
+                    except ValueError:
+                        continue
 
             return Paper(
                 paper_id=paper_id or f"ssrn:{hash(raw_url)}",

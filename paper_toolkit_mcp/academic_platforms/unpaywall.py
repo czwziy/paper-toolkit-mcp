@@ -1,10 +1,12 @@
-from typing import Optional, Dict, Any, List
-from datetime import datetime
 import logging
+from datetime import datetime
+from typing import Any
+
 import requests
+
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
-from ..config import get_env
 from .base import PaperSource
 
 logger = logging.getLogger(__name__)
@@ -16,7 +18,7 @@ class UnpaywallResolver:
     BASE_URL = "https://api.unpaywall.org/v2"
     USER_AGENT = "paper-toolkit-mcp/0.1.3 (https://github.com/openags/paper-toolkit-mcp)"
 
-    def __init__(self, email: Optional[str] = None):
+    def __init__(self, email: str | None = None):
         configured_email = get_env("UNPAYWALL_EMAIL", "") if email is None else email
         self.email = configured_email.strip()
         self.session = requests.Session()
@@ -32,7 +34,7 @@ class UnpaywallResolver:
                 "You can request free access at https://unpaywall.org/products/api"
             )
 
-    def resolve_best_pdf_url(self, doi: str) -> Optional[str]:
+    def resolve_best_pdf_url(self, doi: str) -> str | None:
         """Return the best available OA PDF URL for a DOI."""
         if not doi:
             return None
@@ -68,7 +70,7 @@ class UnpaywallResolver:
 
         return None
 
-    def get_paper_by_doi(self, doi: str) -> Optional[Paper]:
+    def get_paper_by_doi(self, doi: str) -> Paper | None:
         """Fetch Unpaywall metadata by DOI and map it to a Paper object.
 
         Args:
@@ -92,7 +94,7 @@ class UnpaywallResolver:
         if not title:
             title = normalized_doi
 
-        authors: List[str] = []
+        authors: list[str] = []
         for author in data.get("z_authors") or []:
             if not isinstance(author, dict):
                 continue
@@ -145,7 +147,7 @@ class UnpaywallResolver:
             },
         )
 
-    def _fetch_doi_record(self, doi: str) -> Optional[Dict[str, Any]]:
+    def _fetch_doi_record(self, doi: str) -> dict[str, Any] | None:
         """Fetch raw Unpaywall response payload for a DOI."""
         if not self.email or not doi:
             return None
@@ -188,10 +190,10 @@ class UnpaywallSearcher(PaperSource):
     Unpaywall is metadata and OA-location provider. It does not host PDFs.
     """
 
-    def __init__(self, email: Optional[str] = None, resolver: Optional[UnpaywallResolver] = None):
+    def __init__(self, email: str | None = None, resolver: UnpaywallResolver | None = None):
         self.resolver = resolver or UnpaywallResolver(email=email)
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """Lookup a DOI in Unpaywall and return at most one Paper.
 
         Args:

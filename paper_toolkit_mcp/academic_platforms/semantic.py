@@ -1,17 +1,18 @@
-from typing import List, Optional
-from datetime import datetime
+import logging
 import os
-import requests
-from bs4 import BeautifulSoup
-import time
 import random
+import re
+import time
+from datetime import datetime
+from typing import Any
+
+import requests
+from pypdf import PdfReader
+
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
 from .base import PaperSource
-import logging
-from pypdf import PdfReader
-import re
-from ..config import get_env
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ class SemanticSearcher(PaperSource):
             }
         )
 
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
+    def _parse_date(self, date_str: str) -> datetime | None:
         """Parse date from Semantic Scholar format (e.g., '2025-06-02')"""
         try:
             return datetime.strptime(date_str.strip(), "%Y-%m-%d")
@@ -87,7 +88,7 @@ class SemanticSearcher(PaperSource):
 
         return ""
 
-    def _parse_paper(self, item) -> Optional[Paper]:
+    def _parse_paper(self, item) -> Paper | None:
         """Parse single paper entry from Semantic Scholar HTML and optionally fetch detailed info"""
         try:
             authors = [author["name"] for author in item.get("authors", [])]
@@ -140,7 +141,7 @@ class SemanticSearcher(PaperSource):
             return None
 
     @staticmethod
-    def get_api_key() -> Optional[str]:
+    def get_api_key() -> str | None:
         """
         Get the Semantic Scholar API key from environment variables.
         Returns None if no API key is set or if it's empty, enabling unauthenticated access.
@@ -153,7 +154,7 @@ class SemanticSearcher(PaperSource):
             return None
         return api_key.strip()
 
-    def request_api(self, path: str, params: dict) -> dict:
+    def request_api(self, path: str, params: dict) -> requests.Response | dict[str, Any]:
         """
         Make a request to the Semantic Scholar API with optional API key.
         """
@@ -210,8 +211,12 @@ class SemanticSearcher(PaperSource):
                 return response
 
             except requests.exceptions.HTTPError as e:
+                resp = e.response
+                if resp is None:
+                    logger.error(f"HTTP Error requesting API (no response): {e}")
+                    return {"error": "http_error", "message": str(e)}
                 if (
-                    e.response.status_code == 403
+                    resp.status_code == 403
                     and api_key
                     and not has_retried_without_key
                 ):
@@ -221,9 +226,9 @@ class SemanticSearcher(PaperSource):
                     api_key = None
                     has_retried_without_key = True
                     continue
-                if e.response.status_code == 429:
+                if resp.status_code == 429:
                     if attempt < max_retries - 1:
-                        retry_after = e.response.headers.get("Retry-After")
+                        retry_after = resp.headers.get("Retry-After")
                         wait_time = (
                             int(retry_after)
                             if retry_after and retry_after.isdigit()
@@ -247,7 +252,7 @@ class SemanticSearcher(PaperSource):
                     logger.error(f"HTTP Error requesting API: {e}")
                     return {
                         "error": "http_error",
-                        "status_code": e.response.status_code,
+                        "status_code": resp.status_code,
                         "message": str(e),
                     }
             except Exception as e:
@@ -262,10 +267,11 @@ class SemanticSearcher(PaperSource):
     def search(
         self,
         query: str,
-        year: Optional[str] = None,
+        year: str | None = None,
         max_results: int = 10,
         fetch_details: bool = False,
-    ) -> List[Paper]:
+        **kwargs,
+    ) -> list[Paper]:
         """
         Search Semantic Scholar
 
@@ -284,7 +290,7 @@ class SemanticSearcher(PaperSource):
         Returns:
             List[Paper]: List of paper objects
         """
-        papers = []
+        papers: list[Paper] = []
 
         try:
             fields = [
@@ -310,8 +316,8 @@ class SemanticSearcher(PaperSource):
             # Make request
             response = self.request_api("paper/search", params)
 
-            # Check for errors
-            if isinstance(response, dict) and "error" in response:
+            # Check for errors (request_api returns dict on error, Response on success)
+            if isinstance(response, dict):
                 error_msg = response.get("message", "Unknown error")
                 if response.get("error") == "rate_limited":
                     logger.error(f"Rate limited by Semantic Scholar API: {error_msg}")
@@ -320,10 +326,9 @@ class SemanticSearcher(PaperSource):
                 return papers
 
             # Check response status code
-            if not hasattr(response, "status_code") or response.status_code != 200:
-                status_code = getattr(response, "status_code", "unknown")
+            if response.status_code != 200:
                 logger.error(
-                    f"Semantic Scholar search failed with status {status_code}"
+                    f"Semantic Scholar search failed with status {response.status_code}"
                 )
                 return papers
 
@@ -466,7 +471,7 @@ class SemanticSearcher(PaperSource):
             logger.error(f"Read paper error: {e}")
             return f"Error reading paper: {e}"
 
-    def get_paper_details(self, paper_id: str) -> Optional[Paper]:
+    def get_paper_details(self, paper_id: str) -> Paper | None:
         """
         Fetch detailed information for a specific Semantic Scholar paper
 
@@ -503,8 +508,8 @@ class SemanticSearcher(PaperSource):
 
             response = self.request_api(f"paper/{paper_id}", params)
 
-            # Check for errors
-            if isinstance(response, dict) and "error" in response:
+            # Check for errors (request_api returns dict on error, Response on success)
+            if isinstance(response, dict):
                 error_msg = response.get("message", "Unknown error")
                 if response.get("error") == "rate_limited":
                     logger.error(f"Rate limited by Semantic Scholar API: {error_msg}")
@@ -513,10 +518,9 @@ class SemanticSearcher(PaperSource):
                 return None
 
             # Check response status code
-            if not hasattr(response, "status_code") or response.status_code != 200:
-                status_code = getattr(response, "status_code", "unknown")
+            if response.status_code != 200:
                 logger.error(
-                    f"Semantic Scholar paper details fetch failed with status {status_code}"
+                    f"Semantic Scholar paper details fetch failed with status {response.status_code}"
                 )
                 return None
 
@@ -549,7 +553,7 @@ if __name__ == "__main__":
             print(f"\n{i}. {paper.title}")
             print(f"   Paper ID: {paper.paper_id}")
             print(f"   Authors: {', '.join(paper.authors)}")
-            print(f"   Categories: {', '.join(paper.categories)}")
+            print(f"   Categories: {', '.join(paper.categories or [])}")
             print(f"   URL: {paper.url}")
             if paper.pdf_url:
                 print(f"   PDF: {paper.pdf_url}")
@@ -570,7 +574,7 @@ if __name__ == "__main__":
             print(f"\nManual fetch for paper {test_paper_id}:")
             print(f"Title: {paper_details.title}")
             print(f"Authors: {', '.join(paper_details.authors)}")
-            print(f"Categories: {', '.join(paper_details.categories)}")
+            print(f"Categories: {', '.join(paper_details.categories or [])}")
             print(f"URL: {paper_details.url}")
             if paper_details.pdf_url:
                 print(f"PDF: {paper_details.pdf_url}")

@@ -1,54 +1,61 @@
 # paper_toolkit_mcp/server.py
-from typing import List, Dict, Optional, Any
 import asyncio
-import os
 import logging
+import os
 import re
+from typing import Any
+
 import httpx
 from mcp.server.fastmcp import FastMCP
-from .config import get_env, get_work_dir
-from .cache import SearchCache
-from .reference import (
-    parse_citation_placeholders,
-    generate_bibtex,
-    generate_ris,
-    format_citation_gb7714,
-    format_citation_apa,
-    format_citation_ieee,
-    generate_reference_list,
-    process_manuscript_text,
-)
-from .pandoc_helper import convert_to_docx, pandoc_available
+
 from .academic_platforms.arxiv import ArxivSearcher
-from .academic_platforms.pubmed import PubMedSearcher
+from .academic_platforms.base_search import BASESearcher
 from .academic_platforms.biorxiv import BioRxivSearcher
-from .academic_platforms.medrxiv import MedRxivSearcher
-from .academic_platforms.google_scholar import GoogleScholarSearcher
-from .academic_platforms.iacr import IACRSearcher
-from .academic_platforms.semantic import SemanticSearcher
+from .academic_platforms.citeseerx import CiteSeerXSearcher
+from .academic_platforms.core import CORESearcher
 from .academic_platforms.crossref import CrossRefSearcher
+from .academic_platforms.dblp import DBLPSearcher
+from .academic_platforms.doaj import DOAJSearcher
+from .academic_platforms.europepmc import EuropePMCSearcher
+from .academic_platforms.google_scholar import GoogleScholarSearcher
+from .academic_platforms.hal import HALSearcher
+from .academic_platforms.iacr import IACRSearcher
+from .academic_platforms.medrxiv import MedRxivSearcher
+from .academic_platforms.openaire import OpenAiresearcher
 from .academic_platforms.openalex import OpenAlexSearcher
 from .academic_platforms.pmc import PMCSearcher
-from .academic_platforms.core import CORESearcher
-from .academic_platforms.europepmc import EuropePMCSearcher
+from .academic_platforms.pubmed import PubMedSearcher
 from .academic_platforms.sci_hub import SciHubFetcher
-from .academic_platforms.dblp import DBLPSearcher
-from .academic_platforms.openaire import OpenAiresearcher
-from .academic_platforms.citeseerx import CiteSeerXSearcher
-from .academic_platforms.doaj import DOAJSearcher
-from .academic_platforms.base_search import BASESearcher
+from .academic_platforms.semantic import SemanticSearcher
+from .academic_platforms.ssrn import SSRNSearcher
 from .academic_platforms.unpaywall import UnpaywallResolver, UnpaywallSearcher
 from .academic_platforms.zenodo import ZenodoSearcher
-from .academic_platforms.hal import HALSearcher
-from .academic_platforms.ssrn import SSRNSearcher
-from .utils import extract_doi
+from .cache import SearchCache
+from .config import get_env, get_work_dir
+from .pandoc_helper import convert_to_docx, pandoc_available
 
 # from .academic_platforms.hub import SciHubSearcher
-from .paper import Paper
+from .reference import (
+    generate_bibtex,
+    generate_reference_list,
+    generate_ris,
+    parse_citation_placeholders,
+    process_manuscript_text,
+)
 
 # Initialize MCP server
 mcp = FastMCP("paper_toolkit_server")
 logger = logging.getLogger(__name__)
+
+# Default download directory, resolved once at import from WORK_DIR (or CWD).
+# Used as the default save_path for all download_* / read_* MCP tools so files
+# land inside the user's project folder regardless of the server process CWD.
+DEFAULT_SAVE_PATH = os.path.join(get_work_dir(), "downloads")
+
+# Default cache directory, resolved once at import from WORK_DIR (or CWD).
+# Passed explicitly to SearchCache so the cache module stays a pure leaf with
+# no dependency on config (per the layered architecture contract).
+DEFAULT_CACHE_DIR = os.path.join(get_work_dir(), ".paper_cache")
 
 # Instances of searchers
 arxiv_searcher = ArxivSearcher()
@@ -76,49 +83,16 @@ ssrn_searcher = SSRNSearcher()
 # scihub_searcher = SciHubSearcher()
 
 
-# Shared search cache. Lives in <WORK_DIR>/.paper_cache so results follow the
-# user's project folder. Created once at import time (WORK_DIR is read from the
-# environment, which the MCP client sets before launching the server).
-_search_cache = SearchCache()
-
-# Default download directory, resolved once at import from WORK_DIR (or CWD).
-# Used as the default save_path for all download_* / read_* MCP tools so files
-# land inside the user's project folder regardless of the server process CWD.
-DEFAULT_SAVE_PATH = os.path.join(get_work_dir(), "downloads")
-
-
-def _searcher_source_name(searcher) -> str:
-    """Best-effort source name for cache keying."""
-    name = getattr(searcher, "source_name", "")
-    if name:
-        return name
-    return searcher.__class__.__name__.replace("Searcher", "").lower()
-
-
-# Asynchronous helper to adapt synchronous searchers.
-# Runs blocking requests-based calls in a thread pool to avoid blocking the
-# event loop, and transparently reads/writes the shared search cache.
-#
-# Cache key = (source, query, max_results, **kwargs). On a hit the cached list
-# of paper dicts is returned directly (no network call, no Paper rebuild), so
-# there is no to_dict/from_dict roundtrip on the hot path. On a miss the
-# searcher runs and its dict output is cached.
-async def async_search(searcher, query: str, max_results: int, **kwargs) -> List[Dict]:
-    source_name = _searcher_source_name(searcher)
-
-    cached = _search_cache.get(query, source_name, max_results=max_results, **kwargs)
-    if cached is not None:
-        return cached
-
-    papers = await asyncio.to_thread(
-        searcher.search, query, max_results=max_results, **kwargs
-    )
-    paper_dicts = [paper.to_dict() for paper in papers]
-    if paper_dicts:
-        _search_cache.set(
-            query, source_name, paper_dicts, max_results=max_results, **kwargs
-        )
-    return paper_dicts
+# Asynchronous helper to adapt synchronous searchers
+# Runs blocking requests-based calls in a thread pool to avoid blocking the event loop.
+async def async_search(searcher, query: str, max_results: int, **kwargs) -> list[dict]:
+    if 'year' in kwargs:
+        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, year=kwargs['year'])
+    elif kwargs:
+        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results, **kwargs)
+    else:
+        papers = await asyncio.to_thread(searcher.search, query, max_results=max_results)
+    return [paper.to_dict() for paper in papers]
 
 
 ALL_SOURCES = [
@@ -156,7 +130,7 @@ _acm_api_key = get_env("ACM_API_KEY", "")
 
 if _ieee_api_key:
     from .academic_platforms.ieee import IEEESearcher
-    ieee_searcher = IEEESearcher()
+    ieee_searcher: IEEESearcher | None = IEEESearcher()
     ALL_SOURCES.append("ieee")
     logger.info("IEEE Xplore enabled via configured environment key.")
 else:
@@ -164,14 +138,14 @@ else:
 
 if _acm_api_key:
     from .academic_platforms.acm import ACMSearcher
-    acm_searcher = ACMSearcher()
+    acm_searcher: ACMSearcher | None = ACMSearcher()
     ALL_SOURCES.append("acm")
     logger.info("ACM Digital Library enabled via configured environment key.")
 else:
     acm_searcher = None
 
 
-def _parse_sources(sources: str) -> List[str]:
+def _parse_sources(sources: str) -> list[str]:
     if not sources or sources.strip().lower() == "all":
         return ALL_SOURCES
 
@@ -179,7 +153,7 @@ def _parse_sources(sources: str) -> List[str]:
     return [source for source in normalized if source in ALL_SOURCES]
 
 
-def _paper_unique_key(paper: Dict[str, Any]) -> str:
+def _paper_unique_key(paper: dict[str, Any]) -> str:
     doi = (paper.get("doi") or "").strip().lower()
     if doi:
         return f"doi:{doi}"
@@ -193,8 +167,8 @@ def _paper_unique_key(paper: Dict[str, Any]) -> str:
     return f"id:{paper_id}"
 
 
-def _dedupe_papers(papers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    deduped: List[Dict[str, Any]] = []
+def _dedupe_papers(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
     seen: set[str] = set()
 
     for paper in papers:
@@ -214,7 +188,7 @@ def _safe_filename(filename_hint: str, default: str = "paper") -> str:
     return safe[:120]
 
 
-async def _download_from_url(pdf_url: str, save_path: str, filename_hint: str = "paper") -> Optional[str]:
+async def _download_from_url(pdf_url: str, save_path: str, filename_hint: str = "paper") -> str | None:
     if not pdf_url:
         return None
 
@@ -244,7 +218,7 @@ async def _download_from_url(pdf_url: str, save_path: str, filename_hint: str = 
         return None
 
 
-async def _try_repository_fallback(doi: str, title: str, save_path: str) -> tuple[Optional[str], str]:
+async def _try_repository_fallback(doi: str, title: str, save_path: str) -> tuple[str | None, str]:
     repository_searchers = [
         ("openaire", openaire_searcher),
         ("core", core_searcher),
@@ -257,7 +231,7 @@ async def _try_repository_fallback(doi: str, title: str, save_path: str) -> tupl
     if not query_candidates:
         return None, "no DOI/title provided for repository fallback"
 
-    repository_errors: List[str] = []
+    repository_errors: list[str] = []
 
     for repo_name, searcher in repository_searchers:
         for query in query_candidates:
@@ -288,8 +262,8 @@ async def search_papers(
     query: str,
     max_results_per_source: int = 5,
     sources: str = "all",
-    year: Optional[str] = None,
-) -> Dict[str, Any]:
+    year: str | None = None,
+) -> dict[str, Any]:
     """Unified top-level search across all configured academic platforms.
 
     Args:
@@ -368,18 +342,19 @@ async def search_papers(
     source_names = list(task_map.keys())
     source_outputs = await asyncio.gather(*task_map.values(), return_exceptions=True)
 
-    source_results: Dict[str, int] = {}
-    errors: Dict[str, str] = {}
-    merged_papers: List[Dict[str, Any]] = []
+    source_results: dict[str, int] = {}
+    errors: dict[str, str] = {}
+    merged_papers: list[dict[str, Any]] = []
 
-    for source_name, output in zip(source_names, source_outputs):
-        if isinstance(output, Exception):
+    for source_name, output in zip(source_names, source_outputs, strict=False):
+        if isinstance(output, BaseException):
             errors[source_name] = str(output)
             source_results[source_name] = 0
             continue
 
-        source_results[source_name] = len(output)
-        for paper in output:
+        papers_list: list[dict[str, Any]] = output
+        source_results[source_name] = len(papers_list)
+        for paper in papers_list:
             if not paper.get("source"):
                 paper["source"] = source_name
             merged_papers.append(paper)
@@ -400,7 +375,7 @@ async def search_papers(
 
 # Tool definitions
 @mcp.tool()
-async def search_arxiv(query: str, max_results: int = 10, sort_by: str = 'relevance', sort_order: str = 'descending') -> List[Dict]:
+async def search_arxiv(query: str, max_results: int = 10, sort_by: str = 'relevance', sort_order: str = 'descending') -> list[dict]:
     """Search academic papers from arXiv.
 
     Args:
@@ -416,7 +391,7 @@ async def search_arxiv(query: str, max_results: int = 10, sort_by: str = 'releva
 
 
 @mcp.tool()
-async def search_pubmed(query: str, max_results: int = 10, sort: str = 'relevance') -> List[Dict]:
+async def search_pubmed(query: str, max_results: int = 10, sort: str = 'relevance') -> list[dict]:
     """Search academic papers from PubMed.
 
     Args:
@@ -431,7 +406,7 @@ async def search_pubmed(query: str, max_results: int = 10, sort: str = 'relevanc
 
 
 @mcp.tool()
-async def search_biorxiv(query: str, max_results: int = 10) -> List[Dict]:
+async def search_biorxiv(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from bioRxiv.
 
     Note: bioRxiv API filters by category name within the last 30 days, not full-text
@@ -449,7 +424,7 @@ async def search_biorxiv(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_medrxiv(query: str, max_results: int = 10) -> List[Dict]:
+async def search_medrxiv(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from medRxiv.
 
     Note: medRxiv API filters by category name within the last 30 days, not full-text
@@ -467,7 +442,7 @@ async def search_medrxiv(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_google_scholar(query: str, max_results: int = 10) -> List[Dict]:
+async def search_google_scholar(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from Google Scholar.
 
     Args:
@@ -483,7 +458,7 @@ async def search_google_scholar(query: str, max_results: int = 10) -> List[Dict]
 @mcp.tool()
 async def search_iacr(
     query: str, max_results: int = 10, fetch_details: bool = True
-) -> List[Dict]:
+) -> list[dict]:
     """Search academic papers from IACR ePrint Archive.
 
     Args:
@@ -647,7 +622,7 @@ async def read_iacr_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> 
 
 
 @mcp.tool()
-async def search_semantic(query: str, year: Optional[str] = None, max_results: int = 10) -> List[Dict]:
+async def search_semantic(query: str, year: str | None = None, max_results: int = 10) -> list[dict]:
     """Search academic papers from Semantic Scholar.
 
     Args:
@@ -665,8 +640,8 @@ async def search_semantic(query: str, year: Optional[str] = None, max_results: i
 
 
 @mcp.tool()
-async def download_semantic(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
-    """Download PDF of a Semantic Scholar paper.    
+async def download_semantic(paper_id: str, save_path: str = "./downloads") -> str:
+    """Download PDF of a Semantic Scholar paper.
 
     Args:
         paper_id: Semantic Scholar paper ID, Paper identifier in one of the following formats:
@@ -681,13 +656,13 @@ async def download_semantic(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -
         save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         Path to the downloaded PDF file.
-    """ 
+    """
     return semantic_searcher.download_pdf(paper_id, save_path)
 
 
 @mcp.tool()
-async def read_semantic_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
-    """Read and extract text content from a Semantic Scholar paper. 
+async def read_semantic_paper(paper_id: str, save_path: str = "./downloads") -> str:
+    """Read and extract text content from a Semantic Scholar paper.
 
     Args:
         paper_id: Semantic Scholar paper ID, Paper identifier in one of the following formats:
@@ -714,15 +689,15 @@ async def read_semantic_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH)
 async def search_crossref(
     query: str,
     max_results: int = 10,
-    filter: Optional[str] = None,
-    sort: Optional[str] = None,
-    order: Optional[str] = None,
-) -> List[Dict]:
+    filter: str | None = None,
+    sort: str | None = None,
+    order: str | None = None,
+) -> list[dict]:
     """Search academic papers from CrossRef database.
-    
-    CrossRef is a scholarly infrastructure organization that provides 
+
+    CrossRef is a scholarly infrastructure organization that provides
     persistent identifiers (DOIs) for scholarly content and metadata.
-    It's one of the largest citation databases covering millions of 
+    It's one of the largest citation databases covering millions of
     academic papers, journals, books, and other scholarly content.
 
     Args:
@@ -740,14 +715,14 @@ async def search_crossref(
 
 
 @mcp.tool()
-async def get_crossref_paper_by_doi(doi: str) -> Dict:
+async def get_crossref_paper_by_doi(doi: str) -> dict:
     """Get a specific paper from CrossRef by its DOI.
 
     Args:
         doi: Digital Object Identifier (e.g., '10.1038/nature12373').
     Returns:
         Paper metadata in dictionary format, or empty dict if not found.
-        
+
     Example:
         get_crossref_paper_by_doi("10.1038/nature12373")
     """
@@ -764,7 +739,7 @@ async def download_crossref(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -
         save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
     Returns:
         str: Message indicating that direct PDF download is not supported.
-        
+
     Note:
         CrossRef is a citation database and doesn't provide direct PDF downloads.
         Use the DOI to access the paper through the publisher's website.
@@ -841,7 +816,7 @@ async def download_with_fallback(
         "ssrn": ssrn_searcher.download_pdf,
     }
 
-    attempt_errors: List[str] = []
+    attempt_errors: list[str] = []
     primary_error = ""
     if source_name in primary_downloaders:
         try:
@@ -899,7 +874,7 @@ async def read_crossref_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH)
         save_path: Directory where the PDF is/will be saved (default: <WORK_DIR>/downloads).
     Returns:
         str: Message indicating that direct paper reading is not supported.
-        
+
     Note:
         CrossRef is a citation database and doesn't provide direct paper content.
         Use the DOI to access the paper through the publisher's website.
@@ -908,7 +883,7 @@ async def read_crossref_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH)
 
 
 @mcp.tool()
-async def search_openalex(query: str, max_results: int = 10) -> List[Dict]:
+async def search_openalex(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from OpenAlex.
 
     Args:
@@ -922,7 +897,7 @@ async def search_openalex(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_pmc(query: str, max_results: int = 10) -> List[Dict]:
+async def search_pmc(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from PubMed Central (PMC).
 
     Args:
@@ -936,7 +911,7 @@ async def search_pmc(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_core(query: str, max_results: int = 10) -> List[Dict]:
+async def search_core(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from CORE.
 
     Args:
@@ -950,7 +925,7 @@ async def search_core(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_europepmc(query: str, max_results: int = 10) -> List[Dict]:
+async def search_europepmc(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from Europe PMC.
 
     Args:
@@ -964,7 +939,7 @@ async def search_europepmc(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_dblp(query: str, max_results: int = 10) -> List[Dict]:
+async def search_dblp(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from dblp computer science bibliography.
 
     Args:
@@ -978,7 +953,7 @@ async def search_dblp(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_openaire(query: str, max_results: int = 10) -> List[Dict]:
+async def search_openaire(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from OpenAIRE European Open Access infrastructure.
 
     Args:
@@ -992,7 +967,7 @@ async def search_openaire(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_citeseerx(query: str, max_results: int = 10) -> List[Dict]:
+async def search_citeseerx(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from CiteSeerX digital library.
 
     Args:
@@ -1006,7 +981,7 @@ async def search_citeseerx(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_doaj(query: str, max_results: int = 10) -> List[Dict]:
+async def search_doaj(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from DOAJ (Directory of Open Access Journals).
 
     Args:
@@ -1020,7 +995,7 @@ async def search_doaj(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_base(query: str, max_results: int = 10) -> List[Dict]:
+async def search_base(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from BASE (Bielefeld Academic Search Engine).
 
     Args:
@@ -1034,7 +1009,7 @@ async def search_base(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_zenodo(query: str, max_results: int = 10) -> List[Dict]:
+async def search_zenodo(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from Zenodo open repository.
 
     Args:
@@ -1048,7 +1023,7 @@ async def search_zenodo(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_hal(query: str, max_results: int = 10) -> List[Dict]:
+async def search_hal(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from HAL open archive.
 
     Args:
@@ -1062,7 +1037,7 @@ async def search_hal(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_ssrn(query: str, max_results: int = 10) -> List[Dict]:
+async def search_ssrn(query: str, max_results: int = 10) -> list[dict]:
     """Search metadata records from SSRN.
 
     Note: SSRN connector is metadata-only and does not support direct PDF download.
@@ -1078,7 +1053,7 @@ async def search_ssrn(query: str, max_results: int = 10) -> List[Dict]:
 
 
 @mcp.tool()
-async def search_unpaywall(query: str, max_results: int = 10) -> List[Dict]:
+async def search_unpaywall(query: str, max_results: int = 10) -> list[dict]:
     """Lookup a DOI via Unpaywall and return OA metadata.
 
     Unpaywall is DOI-centric and does not support generic keyword search.
@@ -1343,7 +1318,7 @@ async def download_openalex(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -
 # ---------------------------------------------------------------------------
 if ieee_searcher is not None:
     @mcp.tool()
-    async def search_ieee(query: str, max_results: int = 10) -> List[Dict]:
+    async def search_ieee(query: str, max_results: int = 10) -> list[dict]:
         """Search IEEE Xplore for papers.  Requires paper_toolkit_mcp_IEEE_API_KEY (or IEEE_API_KEY).
 
         Args:
@@ -1364,6 +1339,7 @@ if ieee_searcher is not None:
         Returns:
             str: Path to saved PDF or error message.
         """
+        assert ieee_searcher is not None
         return await asyncio.to_thread(ieee_searcher.download_pdf, paper_id, save_path)
 
     @mcp.tool()
@@ -1376,6 +1352,7 @@ if ieee_searcher is not None:
         Returns:
             str: Extracted text content.
         """
+        assert ieee_searcher is not None
         return ieee_searcher.read_paper(paper_id, save_path)
 
 
@@ -1384,7 +1361,7 @@ if ieee_searcher is not None:
 # ---------------------------------------------------------------------------
 if acm_searcher is not None:
     @mcp.tool()
-    async def search_acm(query: str, max_results: int = 10) -> List[Dict]:
+    async def search_acm(query: str, max_results: int = 10) -> list[dict]:
         """Search ACM Digital Library for papers.  Requires paper_toolkit_mcp_ACM_API_KEY (or ACM_API_KEY).
 
         Args:
@@ -1405,6 +1382,7 @@ if acm_searcher is not None:
         Returns:
             str: Path to saved PDF or error message.
         """
+        assert acm_searcher is not None
         return await asyncio.to_thread(acm_searcher.download_pdf, paper_id, save_path)
 
     @mcp.tool()
@@ -1417,6 +1395,7 @@ if acm_searcher is not None:
         Returns:
             str: Extracted text content.
         """
+        assert acm_searcher is not None
         return acm_searcher.read_paper(paper_id, save_path)
 
 
@@ -1428,12 +1407,12 @@ if acm_searcher is not None:
 async def process_manuscript(
     markdown_path: str,
     citation_style: str = "gb7714",
-    output_dir: Optional[str] = None,
+    output_dir: str | None = None,
     generate_docx: bool = True,
-    generate_bibtex: bool = True,
-    generate_ris: bool = True,
+    include_bibtex: bool = True,
+    include_ris: bool = True,
     cache_ttl_hours: int = 24,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Process a Markdown manuscript with citation placeholders and generate formatted outputs.
 
     Supported placeholder formats:
@@ -1447,29 +1426,29 @@ async def process_manuscript(
         citation_style: Citation style for reference list (gb7714, apa, ieee).
         output_dir: Output directory (default: same as input file).
         generate_docx: Whether to generate Word document via pandoc.
-        generate_bibtex: Whether to generate BibTeX file.
-        generate_ris: Whether to generate RIS file for Zotero import.
+        include_bibtex: Whether to generate BibTeX file.
+        include_ris: Whether to generate RIS file for Zotero import.
         cache_ttl_hours: Cache TTL in hours for search results.
 
     Returns:
         Dict with paths to generated files and processing report.
     """
     from .reference import get_paper_by_identifier
-    
-    cache = SearchCache(ttl_hours=cache_ttl_hours)
-    
+
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR, ttl_hours=cache_ttl_hours)
+
     if not os.path.exists(markdown_path):
         return {"error": f"File not found: {markdown_path}"}
-    
-    with open(markdown_path, "r", encoding="utf-8") as f:
+
+    with open(markdown_path, encoding="utf-8") as f:
         markdown_content = f.read()
-    
+
     if output_dir is None:
         output_dir = os.path.dirname(markdown_path) or get_work_dir()
     os.makedirs(output_dir, exist_ok=True)
-    
+
     base_name = os.path.splitext(os.path.basename(markdown_path))[0]
-    
+
     placeholders = parse_citation_placeholders(markdown_content)
     if not placeholders:
         return {
@@ -1477,16 +1456,16 @@ async def process_manuscript(
             "message": "No citation placeholders found in the manuscript.",
             "output_files": {},
         }
-    
+
     unique_citations = {}
     for p in placeholders:
         key = f"{p['type']}:{p['identifier']}"
         if key not in unique_citations:
             unique_citations[key] = p
-    
+
     papers = []
     failed = []
-    
+
     for key, placeholder in unique_citations.items():
         try:
             paper = await asyncio.to_thread(
@@ -1512,38 +1491,38 @@ async def process_manuscript(
                 "type": placeholder["type"],
                 "error": str(e),
             })
-    
+
     output_files = {}
-    
+
     if papers:
         ref_list = generate_reference_list(papers, style=citation_style)
-        
+
         processed = process_manuscript_text(markdown_content, papers)
-        
+
         formatted_md_path = os.path.join(output_dir, f"{base_name}_formatted.md")
         with open(formatted_md_path, "w", encoding="utf-8") as f:
             f.write(processed["formatted_text"])
         output_files["formatted_markdown"] = formatted_md_path
-        
+
         ref_list_path = os.path.join(output_dir, f"{base_name}_references.txt")
         with open(ref_list_path, "w", encoding="utf-8") as f:
             f.write(f"## References\n\n{ref_list}")
         output_files["reference_list"] = ref_list_path
-        
-        if generate_bibtex:
+
+        if include_bibtex:
             bib_content = generate_bibtex(papers)
             bib_path = os.path.join(output_dir, "refs.bib")
             with open(bib_path, "w", encoding="utf-8") as f:
                 f.write(bib_content)
             output_files["bibtex"] = bib_path
-        
-        if generate_ris:
+
+        if include_ris:
             ris_content = generate_ris(papers)
             ris_path = os.path.join(output_dir, "refs.ris")
             with open(ris_path, "w", encoding="utf-8") as f:
                 f.write(ris_content)
             output_files["ris"] = ris_path
-        
+
         if generate_docx:
             if pandoc_available():
                 try:
@@ -1560,7 +1539,7 @@ async def process_manuscript(
                     potential_csl = os.path.join(csl_dir, csl_name)
                     if os.path.exists(potential_csl):
                         csl_file = potential_csl
-                    
+
                     docx_path = os.path.join(output_dir, f"{base_name}_final.docx")
                     result = convert_to_docx(
                         formatted_md_path,
@@ -1576,7 +1555,7 @@ async def process_manuscript(
                     output_files["docx_error"] = str(e)
             else:
                 output_files["docx_skipped"] = "pandoc not installed"
-    
+
     report = {
         "total_placeholders": len(placeholders),
         "unique_citations": len(unique_citations),
@@ -1586,7 +1565,7 @@ async def process_manuscript(
     }
     if failed:
         report["failed_items"] = failed
-    
+
     return {
         "status": "completed",
         "report": report,
@@ -1598,7 +1577,7 @@ async def process_manuscript(
 async def get_paper_metadata(
     identifier: str,
     cache_ttl_hours: int = 24,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get full metadata for a single paper by DOI, PMID, or arXiv ID.
 
     Args:
@@ -1609,15 +1588,15 @@ async def get_paper_metadata(
         Paper metadata dict or error.
     """
     from .reference import get_paper_by_identifier
-    
-    cache = SearchCache(ttl_hours=cache_ttl_hours)
-    
+
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR, ttl_hours=cache_ttl_hours)
+
     parts = identifier.split(":", 1)
     if len(parts) != 2:
         return {"error": "Invalid identifier format. Use 'type:id' (e.g., 'doi:10.1234')"}
-    
+
     id_type, id_value = parts[0].strip().lower(), parts[1].strip()
-    
+
     try:
         paper = await asyncio.to_thread(
             get_paper_by_identifier, id_type, id_value, cache=cache
@@ -1631,10 +1610,10 @@ async def get_paper_metadata(
 
 @mcp.tool()
 async def export_references(
-    identifiers: List[str],
+    identifiers: list[str],
     format: str = "bibtex",
     style: str = "gb7714",
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
     cache_ttl_hours: int = 24,
 ) -> str:
     """Export references for multiple papers in the specified format.
@@ -1650,10 +1629,10 @@ async def export_references(
         Formatted references string or saved file path.
     """
     from .reference import get_paper_by_identifier
-    
-    cache = SearchCache(ttl_hours=cache_ttl_hours)
+
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR, ttl_hours=cache_ttl_hours)
     papers = []
-    
+
     for identifier in identifiers:
         parts = identifier.split(":", 1)
         if len(parts) != 2:
@@ -1665,12 +1644,12 @@ async def export_references(
             )
             if paper:
                 papers.append(paper)
-        except Exception:
-            pass
-    
+        except Exception as e:
+            logger.warning(f"Failed to fetch paper {id_value}: {e}")
+
     if not papers:
         return "No papers found for the given identifiers."
-    
+
     if format == "bibtex":
         content = generate_bibtex(papers)
     elif format == "ris":
@@ -1679,24 +1658,24 @@ async def export_references(
         content = generate_reference_list(papers, style=style)
     else:
         return f"Unsupported format: {format}. Use bibtex, ris, or text."
-    
+
     if output_path:
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(content)
         return f"References saved to: {output_path}"
-    
+
     return content
 
 
 @mcp.tool()
-async def cache_list() -> Dict[str, Any]:
+async def cache_list() -> dict[str, Any]:
     """List all cached search results.
 
     Returns:
         Dict with cache statistics and list of cached items.
     """
-    cache = SearchCache()
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR)
     return {
         "stats": cache.get_stats(),
         "items": cache.list_cache(),
@@ -1704,13 +1683,13 @@ async def cache_list() -> Dict[str, Any]:
 
 
 @mcp.tool()
-async def cache_clear() -> Dict[str, Any]:
+async def cache_clear() -> dict[str, Any]:
     """Clear all cached search results.
 
     Returns:
         Dict with number of cleared entries.
     """
-    cache = SearchCache()
+    cache = SearchCache(cache_dir=DEFAULT_CACHE_DIR)
     count = cache.clear()
     return {
         "status": "cleared",

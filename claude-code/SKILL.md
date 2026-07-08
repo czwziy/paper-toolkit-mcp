@@ -11,14 +11,14 @@ Search, download, and read academic papers via the `paper-toolkit` CLI.
 
 All commands run via:
 ```bash
-uv run --directory <REPO_PATH> paper-toolkit <command> [args]
+paper-toolkit <command> [args]
 ```
 
-Replace `<REPO_PATH>` with the absolute path to your clone of this repository.
+Requires `pip install paper-toolkit-mcp` (provides the `paper-toolkit` entry point).
 
 ### Search
 ```bash
-uv run --directory <REPO_PATH> paper-toolkit search "<query>" -n <max_per_source> -s <sources> -y <year>
+paper-toolkit search "<query>" -n <max_per_source> -s <sources> -y <year>
 ```
 - `-n`: results per source (default: 5)
 - `-s`: comma-separated sources or "all" (default: all)
@@ -28,17 +28,17 @@ For speed, prefer targeted sources (`-s arxiv,semantic,crossref`) over "all" unl
 
 ### Download PDF
 ```bash
-uv run --directory <REPO_PATH> paper-toolkit download <source> <paper_id> [-o ./downloads]
+paper-toolkit download <source> <paper_id> [-o ./downloads]
 ```
 
 ### Read (extract text)
 ```bash
-uv run --directory <REPO_PATH> paper-toolkit read <source> <paper_id> [-o ./downloads]
+paper-toolkit read <source> <paper_id> [-o ./downloads]
 ```
 
 ### List sources
 ```bash
-uv run --directory <REPO_PATH> paper-toolkit sources
+paper-toolkit sources
 ```
 
 ## Output

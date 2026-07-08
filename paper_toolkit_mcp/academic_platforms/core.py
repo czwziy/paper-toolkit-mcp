@@ -1,16 +1,18 @@
 # paper_toolkit_mcp/academic_platforms/core.py
-from typing import List, Optional, Dict, Any
-import requests
 import logging
 import os
+import time
 from datetime import datetime
 from pathlib import Path
-import time
+from typing import Any
+
+import requests
+from pypdf import PdfReader
+
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
-from ..config import get_env
 from .base import PaperSource
-from pypdf import PdfReader
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,7 @@ class CORESearcher(PaperSource):
     BASE_URL = "https://api.core.ac.uk/v3"
     RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize CORE searcher.
 
@@ -39,7 +41,7 @@ class CORESearcher(PaperSource):
         else:
             logger.warning("No CORE API key provided. Searches may be rate-limited or return limited results.")
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search CORE for open access research papers.
 
@@ -55,11 +57,11 @@ class CORESearcher(PaperSource):
         Returns:
             List[Paper]: List of found papers with metadata
         """
-        papers = []
+        papers: list[Paper] = []
 
         try:
             # Prepare search parameters
-            params = {
+            params: dict[str, Any] = {
                 'q': query,
                 'limit': min(max_results, 100),  # CORE API max limit is 100
                 'offset': 0,
@@ -158,7 +160,7 @@ class CORESearcher(PaperSource):
 
         return papers
 
-    def _parse_item(self, item: Dict[str, Any]) -> Optional[Paper]:
+    def _parse_item(self, item: dict[str, Any]) -> Paper | None:
         """Parse a single CORE API result item into a Paper object."""
         try:
             # Extract core ID
@@ -206,8 +208,8 @@ class CORESearcher(PaperSource):
                         year = published_date[:4]
                         if year.isdigit():
                             pub_date = datetime(int(year), 1, 1)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Failed to parse date: {e}")
 
             # Extract URLs
             url = item.get('url', '')
@@ -316,12 +318,12 @@ class CORESearcher(PaperSource):
                 preferred = next(
                     (
                         candidate for candidate in candidates
-                        if str(getattr(candidate, 'paper_id', '')) == str(paper_id)
-                        and getattr(candidate, 'pdf_url', '')
+                        if str(candidate.paper_id) == str(paper_id)
+                        and candidate.pdf_url
                     ),
                     None,
                 )
-                selected = preferred or next((candidate for candidate in candidates if getattr(candidate, 'pdf_url', '')), None)
+                selected = preferred or next((candidate for candidate in candidates if candidate.pdf_url), None)
                 if selected:
                     pdf_url = selected.pdf_url
                     paper_title = selected.title or paper_title
@@ -364,7 +366,7 @@ class CORESearcher(PaperSource):
             logger.error(error_msg)
             raise Exception(error_msg)
 
-    def _get_paper_details(self, paper_id: str) -> Optional[Dict[str, Any]]:
+    def _get_paper_details(self, paper_id: str) -> dict[str, Any] | None:
         """Get detailed information for a CORE paper by ID."""
         try:
             response = self.session.get(f"{self.BASE_URL}/works/{paper_id}", timeout=30)
@@ -425,8 +427,9 @@ class CORESearcher(PaperSource):
 
 if __name__ == "__main__":
     # Test the CORESearcher
-    import sys
     import os
+    import sys
+    import tempfile
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
     # Check for API key
@@ -455,12 +458,12 @@ if __name__ == "__main__":
         print("\n\nTesting CORE PDF download...")
         test_core_id = papers[0].paper_id
         try:
-            pdf_path = searcher.download_pdf(test_core_id, "/tmp/core_test")
+            pdf_path = searcher.download_pdf(test_core_id, f"{tempfile.gettempdir()}/core_test")
             print(f"PDF downloaded to: {pdf_path}")
 
             # Test text extraction
             print("\nTesting text extraction...")
-            text = searcher.read_paper(test_core_id, "/tmp/core_test")
+            text = searcher.read_paper(test_core_id, f"{tempfile.gettempdir()}/core_test")
             print(f"Extracted text length: {len(text)} characters")
             if len(text) > 200:
                 print(f"Text preview: {text[:200]}...")

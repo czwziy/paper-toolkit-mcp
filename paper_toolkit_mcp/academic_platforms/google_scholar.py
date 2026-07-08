@@ -1,21 +1,21 @@
-from typing import List, Optional
+import logging
+import random
+import time
 from datetime import datetime
+
 import requests
 from bs4 import BeautifulSoup
-import time
-import random
-import re
+
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
-from ..config import get_env
 from .base import PaperSource
-import logging
 
 logger = logging.getLogger(__name__)
 
 class GoogleScholarSearcher(PaperSource):
     """Custom implementation of Google Scholar paper search"""
-    
+
     SCHOLAR_URL = "https://scholar.google.com/scholar"
     BROWSERS = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -23,7 +23,7 @@ class GoogleScholarSearcher(PaperSource):
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
     ]
 
-    def __init__(self, max_retries: int = 3, retry_delay: float = 2.0, proxy_url: Optional[str] = None):
+    def __init__(self, max_retries: int = 3, retry_delay: float = 2.0, proxy_url: str | None = None):
         self.max_retries = max(1, max_retries)
         self.retry_delay = max(0.5, retry_delay)
         self.proxy_url = (proxy_url or get_env("GOOGLE_SCHOLAR_PROXY_URL", "")).strip()
@@ -55,14 +55,14 @@ class GoogleScholarSearcher(PaperSource):
             or 'please show you\'re not a robot' in soup.get_text(' ', strip=True).lower()
         )
 
-    def _extract_year(self, text: str) -> Optional[int]:
+    def _extract_year(self, text: str) -> int | None:
         """Extract year from publication info"""
         for word in text.split():
             if word.isdigit() and 1900 <= int(word) <= datetime.now().year:
                 return int(word)
         return None
 
-    def _parse_paper(self, item) -> Optional[Paper]:
+    def _parse_paper(self, item) -> Paper | None:
         """Parse single paper entry from HTML"""
         try:
             # Extract main paper elements
@@ -109,11 +109,11 @@ class GoogleScholarSearcher(PaperSource):
             logger.warning(f"Failed to parse paper: {e}")
             return None
 
-    def search(self, query: str, max_results: int = 10) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search Google Scholar with custom parameters
         """
-        papers = []
+        papers: list[Paper] = []
         start = 0
         results_per_page = min(10, max_results)
 
@@ -176,7 +176,7 @@ class GoogleScholarSearcher(PaperSource):
                 for item in results:
                     if len(papers) >= max_results:
                         break
-                        
+
                     paper = self._parse_paper(item)
                     if paper:
                         papers.append(paper)
@@ -192,7 +192,7 @@ class GoogleScholarSearcher(PaperSource):
     def download_pdf(self, paper_id: str, save_path: str) -> str:
         """
         Google Scholar doesn't support direct PDF downloads
-        
+
         Raises:
             NotImplementedError: Always raises this error
         """
@@ -204,7 +204,7 @@ class GoogleScholarSearcher(PaperSource):
     def read_paper(self, paper_id: str, save_path: str = "./downloads") -> str:
         """
         Google Scholar doesn't support direct paper reading
-        
+
         Returns:
             str: Message indicating the feature is not supported
         """
@@ -216,11 +216,11 @@ class GoogleScholarSearcher(PaperSource):
 if __name__ == "__main__":
     # Test Google Scholar searcher
     searcher = GoogleScholarSearcher()
-    
+
     print("Testing search functionality...")
     query = "machine learning"
     max_results = 5
-    
+
     try:
         papers = searcher.search(query, max_results=max_results)
         print(f"\nFound {len(papers)} papers for query '{query}':")

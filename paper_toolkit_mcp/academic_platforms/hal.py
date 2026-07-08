@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import List, Optional, Dict, Any
+from datetime import datetime
+from typing import Any
 
 import requests
 
-from .base import PaperSource
 from ..paper import Paper
+from .base import PaperSource
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class HALSearcher(PaperSource):
     # PaperSource interface
     # ------------------------------------------------------------------
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """Search HAL open archive.
 
         Args:
@@ -77,7 +78,7 @@ class HALSearcher(PaperSource):
         """
         max_results = max(1, min(max_results, 10000))
 
-        fq_parts: List[str] = []
+        fq_parts: list[str] = []
 
         year = kwargs.get("year")
         if year:
@@ -91,7 +92,7 @@ class HALSearcher(PaperSource):
         if domain:
             fq_parts.append(f"domain_s:{domain}")
 
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             "q": query,
             "fl": self._FIELDS,
             "rows": max_results,
@@ -109,7 +110,7 @@ class HALSearcher(PaperSource):
             logger.error("HAL search failed: %s", exc)
             return []
 
-        papers: List[Paper] = []
+        papers: list[Paper] = []
         for doc in data.get("response", {}).get("docs", []):
             paper = self._parse_doc(doc)
             if paper:
@@ -205,11 +206,11 @@ class HALSearcher(PaperSource):
             # Even if content-type is not pdf, if redirect lands at a PDF URL, use it
             if head.status_code == 200:
                 return candidate
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"HEAD request failed for {candidate}: {e}")
         return ""
 
-    def _parse_doc(self, doc: Dict[str, Any]) -> Optional[Paper]:
+    def _parse_doc(self, doc: dict[str, Any]) -> Paper | None:
         """Convert a HAL Solr document dict into a :class:`Paper`."""
         try:
             hal_id = doc.get("halId_s", "")
@@ -224,9 +225,9 @@ class HALSearcher(PaperSource):
 
             authors_field = doc.get("authFullName_s", [])
             if isinstance(authors_field, list):
-                authors = ", ".join(authors_field)
+                authors = list(authors_field)
             else:
-                authors = str(authors_field)
+                authors = [str(authors_field)] if authors_field else []
 
             abstract_field = doc.get("abstract_s", [])
             if isinstance(abstract_field, list):
@@ -239,9 +240,12 @@ class HALSearcher(PaperSource):
                 doi = doi[0] if doi else ""
 
             year = doc.get("publicationDateY_i") or doc.get("producedDateY_i", "")
-            pub_date = (
-                str(year) if year else (doc.get("submittedDate_s", "") or "")[:10]
-            )
+            pub_date: datetime | None = None
+            if year:
+                try:
+                    pub_date = datetime(int(year), 1, 1)
+                except (ValueError, TypeError):
+                    pub_date = None
 
             pdf_url = doc.get("fileMain_s", "") or ""
             record_url = doc.get("uri_s", f"https://hal.archives-ouvertes.fr/{hal_id}")
@@ -252,7 +256,7 @@ class HALSearcher(PaperSource):
                 authors=authors,
                 abstract=abstract.strip(),
                 doi=doi,
-                published_date=str(pub_date),
+                published_date=pub_date,
                 pdf_url=pdf_url,
                 url=record_url,
                 source="hal",

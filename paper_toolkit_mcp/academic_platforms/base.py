@@ -1,33 +1,30 @@
 """Base class for all academic paper source searchers."""
 from abc import ABC, abstractmethod
-from typing import List, Optional
+
 from ..paper import Paper
 
 
 class PaperSource(ABC):
     """Abstract base class for academic paper sources."""
-    
+
     def __init__(self, cache=None):
         """Initialize searcher with optional cache.
-        
+
         Args:
             cache: Optional SearchCache instance for caching search results.
         """
         self._cache = cache
-    
+
     def search_with_cache(
         self,
         query: str,
+        cache_kwargs: dict | None = None,
         **kwargs,
-    ) -> List[Paper]:
+    ) -> list[Paper]:
         """Search with caching support.
 
-        Checks the cache first (keyed by source, query, and all kwargs); on a
-        miss, calls the abstract search() method and caches the result.
-
-        All kwargs (e.g. max_results, year, sort_by) are used BOTH as the
-        search() arguments AND as part of the cache key, so searches with
-        different parameters never collide in the cache.
+        This method checks cache first, and if not found, calls the abstract
+        search() method and caches the result.
 
         Args:
             query: Search query string.
@@ -36,28 +33,30 @@ class PaperSource(ABC):
         Returns:
             List of Paper objects.
         """
-        cache = getattr(self, "_cache", None)
+        if cache_kwargs is None:
+            cache_kwargs = {}
 
-        if cache is not None:
-            cached_papers = cache.get(query, self.source_name, **kwargs)
+        if self._cache is not None:
+            cached_papers = self._cache.get(query, self.source_name, **cache_kwargs)
             if cached_papers is not None:
-                return [Paper.from_dict(p) for p in cached_papers]
+                papers = [Paper(**p) for p in cached_papers]
+                return papers
 
         papers = self.search(query, **kwargs)
 
-        if cache is not None and papers:
+        if self._cache is not None and papers:
             paper_dicts = [p.to_dict() for p in papers]
-            cache.set(query, self.source_name, paper_dicts, **kwargs)
+            self._cache.set(query, self.source_name, paper_dicts, **cache_kwargs)
 
         return papers
-    
+
     @property
     def source_name(self) -> str:
         """Return the source name for cache key. Override in subclasses."""
         return self.__class__.__name__.replace("Searcher", "").lower()
-    
+
     @abstractmethod
-    def search(self, query: str, **kwargs) -> List[Paper]:
+    def search(self, query: str, **kwargs) -> list[Paper]:
         """Search papers matching the query.
 
         Args:

@@ -1,17 +1,17 @@
 # paper_toolkit_mcp/academic_platforms/citeseerx.py
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import requests
-import logging
 import json
-import xml.etree.ElementTree as ET
-from urllib.parse import quote, urlencode
-from requests.exceptions import SSLError
-import urllib3
+import logging
+import os
+from datetime import datetime
+from typing import Any
 
+import requests
+import urllib3
+from requests.exceptions import SSLError
+
+from ..config import get_env
 from ..paper import Paper
 from ..utils import extract_doi
-from ..config import get_env
 from .base import PaperSource
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class CiteSeerXSearcher(PaperSource):
     SEARCH_API = f"{BASE_URL}/api/search"
     PAPERS_API = f"{BASE_URL}/api/papers"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: str | None = None):
         """
         Initialize CiteSeerX searcher.
 
@@ -63,7 +63,7 @@ class CiteSeerXSearcher(PaperSource):
             )
         return resp
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search CiteSeerX for computer science papers.
 
@@ -151,7 +151,7 @@ class CiteSeerXSearcher(PaperSource):
 
         return papers
 
-    def _parse_citeseerx_result(self, result: Dict[str, Any]) -> Optional[Paper]:
+    def _parse_citeseerx_result(self, result: dict[str, Any]) -> Paper | None:
         """Parse a CiteSeerX API result into a Paper object."""
         try:
             # Extract paper info from result
@@ -266,7 +266,7 @@ class CiteSeerXSearcher(PaperSource):
             logger.warning(f"Error parsing CiteSeerX result data: {e}")
             return None
 
-    def get_paper_details(self, paper_id: str) -> Optional[Paper]:
+    def get_paper_details(self, paper_id: str) -> Paper | None:
         """
         Get detailed information for a specific paper.
 
@@ -401,7 +401,7 @@ if __name__ == "__main__":
         print(f"\n{i+1}. {paper.title}")
         print(f"   Authors: {', '.join(paper.authors[:3])}{'...' if len(paper.authors) > 3 else ''}")
         print(f"   DOI: {paper.doi}")
-        print(f"   Year: {paper.extra.get('year', 'N/A')}")
-        print(f"   Venue: {paper.extra.get('venue', 'N/A')}")
+        print(f"   Year: {(paper.extra or {}).get('year', 'N/A')}")
+        print(f"   Venue: {(paper.extra or {}).get('venue', 'N/A')}")
         print(f"   Citations: {paper.citations}")
         print(f"   URL: {paper.url}")

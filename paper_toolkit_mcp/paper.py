@@ -1,7 +1,7 @@
 # paper_toolkit_mcp/paper.py
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Optional
+
 
 @dataclass
 class Paper:
@@ -9,21 +9,21 @@ class Paper:
     # 核心字段（必填，但允许空值或默认值）
     paper_id: str              # Unique identifier (e.g., arXiv ID, PMID, DOI)
     title: str                 # Paper title
-    authors: List[str]         # List of author names
+    authors: list[str]         # List of author names
     abstract: str              # Abstract text
     doi: str                   # Digital Object Identifier
-    published_date: Optional[datetime]   # Publication date
+    published_date: datetime | None   # Publication date
     pdf_url: str               # Direct PDF link
     url: str                   # URL to paper page
     source: str                # Source platform (e.g., 'arxiv', 'pubmed')
 
     # 可选字段
-    updated_date: Optional[datetime] = None        # Last updated date
-    categories: Optional[List[str]] = None         # Subject categories
-    keywords: Optional[List[str]] = None           # Keywords
+    updated_date: datetime | None = None        # Last updated date
+    categories: list[str] | None = None         # Subject categories
+    keywords: list[str] | None = None           # Keywords
     citations: int = 0                             # Citation count
-    references: Optional[List[str]] = None         # List of reference IDs/DOIs
-    extra: Optional[Dict] = None                   # Source-specific extra metadata
+    references: list[str] | None = None         # List of reference IDs/DOIs
+    extra: dict | None = None                   # Source-specific extra metadata
 
     def __post_init__(self):
         """Post-initialization to handle default values"""
@@ -38,7 +38,7 @@ class Paper:
         if self.extra is None:
             self.extra = {}
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert paper to dictionary format for serialization"""
         return {
             'paper_id': self.paper_id,
@@ -57,60 +57,3 @@ class Paper:
             'references': '; '.join(self.references) if self.references else '',
             'extra': str(self.extra) if self.extra else ''
         }
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> "Paper":
-        """Reconstruct a Paper from its to_dict() output.
-
-        Reverses the list-joining ('; ') and ISO date serialization performed
-        by to_dict(), so cached paper dicts can be safely turned back into
-        Paper objects without TypeError on list-typed fields.
-        """
-        import ast
-
-        def _split(value):
-            if isinstance(value, list):
-                return value
-            if not value:
-                return []
-            return [part for part in str(value).split("; ") if part]
-
-        def _parse_dt(value):
-            if not value:
-                return None
-            try:
-                return datetime.fromisoformat(str(value))
-            except (ValueError, TypeError):
-                return None
-
-        extra = data.get("extra", "")
-        if isinstance(extra, str) and extra:
-            try:
-                extra = ast.literal_eval(extra)
-            except (ValueError, SyntaxError):
-                extra = {}
-        elif not isinstance(extra, dict):
-            extra = {}
-
-        try:
-            citations = int(data.get("citations", 0) or 0)
-        except (TypeError, ValueError):
-            citations = 0
-
-        return cls(
-            paper_id=data.get("paper_id", ""),
-            title=data.get("title", ""),
-            authors=_split(data.get("authors", "")),
-            abstract=data.get("abstract", ""),
-            doi=data.get("doi", ""),
-            published_date=_parse_dt(data.get("published_date")),
-            pdf_url=data.get("pdf_url", ""),
-            url=data.get("url", ""),
-            source=data.get("source", ""),
-            updated_date=_parse_dt(data.get("updated_date")),
-            categories=_split(data.get("categories", "")),
-            keywords=_split(data.get("keywords", "")),
-            citations=citations,
-            references=_split(data.get("references", "")),
-            extra=extra,
-        )

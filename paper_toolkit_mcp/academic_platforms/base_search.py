@@ -9,10 +9,11 @@ OAI-PMH Endpoint: https://api.base-search.net/cgi-bin/BaseHttpSearchInterface.fc
 Documentation: https://www.base-search.net/about/en/about_sources_date.php
 """
 
-from typing import List, Optional, Dict, Any
 import logging
-from .oaipmh import OAIPMHSearcher
+from typing import Any
+
 from ..paper import Paper
+from .oaipmh import OAIPMHSearcher
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class BASESearcher(OAIPMHSearcher):
             'User-Agent': 'paper-toolkit-mcp/0.1.3 (BASE OAI-PMH client; https://github.com/openags/paper-toolkit-mcp)'
         })
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """Search BASE using OAI-PMH with query filtering.
 
         Args:
@@ -68,7 +69,7 @@ class BASESearcher(OAIPMHSearcher):
 
         return filtered_papers[:max_results]
 
-    def _filter_paper(self, paper: Paper, filters: Dict[str, Any]) -> bool:
+    def _filter_paper(self, paper: Paper, filters: dict[str, Any]) -> bool:
         """Apply BASE-specific filters to paper.
 
         Args:
@@ -87,8 +88,8 @@ class BASESearcher(OAIPMHSearcher):
         # Subject filter
         if 'subject' in filters and filters['subject']:
             subject_lower = filters['subject'].lower()
-            in_categories = any(subject_lower in cat.lower() for cat in paper.categories)
-            in_keywords = any(subject_lower in kw.lower() for kw in paper.keywords)
+            in_categories = any(subject_lower in cat.lower() for cat in (paper.categories or []))
+            in_keywords = any(subject_lower in kw.lower() for kw in (paper.keywords or []))
             if not in_categories and not in_keywords:
                 return False
 
@@ -116,7 +117,6 @@ class BASESearcher(OAIPMHSearcher):
             paper.extra = {}
 
         # Extract BASE-specific identifiers
-        import xml.etree.ElementTree as ET
         identifiers = dc_root.findall('.//{http://purl.org/dc/elements/1.1/}identifier') or \
                      dc_root.findall('identifier')
 
@@ -181,7 +181,7 @@ class BASESearcher(OAIPMHSearcher):
         paper = papers[0]
         if paper.pdf_url:
             import os
-            import requests
+
             response = self.session.get(paper.pdf_url, timeout=30)
             response.raise_for_status()
             os.makedirs(save_path, exist_ok=True)

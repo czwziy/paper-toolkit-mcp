@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-type-arch:
+    name: Lint + Type + Architecture
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # 用于 Doc Freshness 的 git log 时间戳检查
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Ruff (style + isort + bugbear)
+        # 检查生产代码 + 全部测试（unit + integration）
+        run: ruff check paper_toolkit_mcp tests
+
+      - name: Mypy (types)
+        run: mypy paper_toolkit_mcp
+
+      - name: Import-linter (architecture layers)
+        run: lint-imports
+
+  test:
+    name: Unit tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Pytest (unit only — hermetic, no network)
+        run: pytest --cov=paper_toolkit_mcp --cov-report=term-missing
+
+  security-and-guards:
+    name: Security + File size + Doc freshness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Bandit (security scan)
+        run: bandit -r paper_toolkit_mcp -c .harness/constraints/security/bandit.yaml -q
+
+      - name: File size gate (≤ 400 lines per .py)
+        # 目标阈值 400 行；历史超标文件见 .harness/constraints/contracts.md 豁免清单
+        # 豁免文件后续按渐进收紧计划拆分
+        run: |
+          # 已知历史超标文件豁免清单（拆分计划见 contracts.md）
+          EXEMPT="paper_toolkit_mcp/server.py paper_toolkit_mcp/reference.py paper_toolkit_mcp/cli.py paper_toolkit_mcp/academic_platforms/openaire.py paper_toolkit_mcp/academic_platforms/semantic.py paper_toolkit_mcp/academic_platforms/iacr.py paper_toolkit_mcp/academic_platforms/oaipmh.py paper_toolkit_mcp/academic_platforms/core.py paper_toolkit_mcp/academic_platforms/europepmc.py paper_toolkit_mcp/academic_platforms/pmc.py paper_toolkit_mcp/academic_platforms/citeseerx.py paper_toolkit_mcp/academic_platforms/doaj.py"
+          bad=$(find paper_toolkit_mcp -name "*.py" -exec wc -l {} + \
+                | awk '$1>400 && $2!="total" {print $2}')
+          new_violations=""
+          for f in $bad; do
+            if ! echo " $EXEMPT " | grep -q " $f "; then
+              lines=$(wc -l < "$f")
+              new_violations="$new_violations$f: $lines lines
+          "
+            fi
+          done
+          if [ -n "$new_violations" ]; then
+            echo "::error::新增文件超过 400 行（历史超标文件已在豁免清单，见 contracts.md）："
+            echo "$new_violations"
+            exit 1
+          fi
+          echo "All source files within size limit (or in historical exemption list)."
+
+      - name: Doc freshness (warn if .trae/specs/* older than 60 days)
+        run: |
+          STALE_DAYS=60
+          CUTOFF=$(( $(date +%s) - STALE_DAYS * 86400 ))
+          stale=0
+          while IFS= read -r f; do
+            ts=$(git log -1 --format=%ct -- "$f" 2>/dev/null || echo 0)
+            if [ "$ts" -gt 0 ] && [ "$ts" -lt "$CUTOFF" ]; then
+              echo "::warning file=$f::设计文档超过 $STALE_DAYS 天未更新，可能已与实现脱节"
+              stale=1
+            fi
+          done < <(find .trae/specs -name "*.md" -type f 2>/dev/null)
+          [ "$stale" = "0" ] && echo "All design docs fresh." || true

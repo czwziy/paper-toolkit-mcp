@@ -1,11 +1,13 @@
 # paper_toolkit_mcp/academic_platforms/dblp.py
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-import requests
+from __future__ import annotations
+
 import logging
-import xml.etree.ElementTree as ET
 import time
+from datetime import datetime
+
+import requests
 from bs4 import BeautifulSoup
+from defusedxml import ElementTree as ET
 
 from ..paper import Paper
 from ..utils import extract_doi
@@ -30,7 +32,7 @@ class DBLPSearcher(PaperSource):
             'Accept': 'application/xml, application/json'
         })
 
-    def search(self, query: str, max_results: int = 10, **kwargs) -> List[Paper]:
+    def search(self, query: str, max_results: int = 10, **kwargs) -> list[Paper]:
         """
         Search dblp for computer science publications.
 
@@ -124,11 +126,9 @@ class DBLPSearcher(PaperSource):
             logger.error(f"Unexpected error in dblp search: {e}")
             return self._search_html_fallback(query=query, max_results=max_results)
 
-        return papers
-
-    def _search_html_fallback(self, query: str, max_results: int) -> List[Paper]:
+    def _search_html_fallback(self, query: str, max_results: int) -> list[Paper]:
         """Fallback search via dblp HTML endpoint when API is unavailable."""
-        papers: List[Paper] = []
+        papers: list[Paper] = []
         try:
             response = self.session.get(
                 self.HTML_SEARCH_URL,
@@ -152,9 +152,9 @@ class DBLPSearcher(PaperSource):
                     details_link = entry.select_one('li.details a[href]')
                     ee_link = entry.select_one('li.ee a[href]')
                     if details_link and details_link.get('href'):
-                        paper_url = details_link['href']
+                        paper_url = str(details_link['href'])
                     if ee_link and ee_link.get('href'):
-                        ee_href = ee_link['href']
+                        ee_href = str(ee_link['href'])
                         extracted = extract_doi(ee_href)
                         if extracted:
                             doi = extracted
@@ -169,13 +169,13 @@ class DBLPSearcher(PaperSource):
                     if year_str.isdigit():
                         published_date = datetime(int(year_str), 1, 1)
 
-                    authors: List[str] = []
+                    authors: list[str] = []
                     for node in entry.select('[itemprop="author"] [itemprop="name"], [itemprop="author"]'):
                         text = node.get_text(' ', strip=True)
                         if text and text not in authors and len(text) < 120:
                             authors.append(text)
 
-                    entry_id = entry.get('id') or f"dblp_{hash(title) & 0xffffffff:08x}"
+                    entry_id = str(entry.get('id') or f"dblp_{hash(title) & 0xffffffff:08x}")
 
                     papers.append(Paper(
                         paper_id=entry_id,
@@ -207,7 +207,7 @@ class DBLPSearcher(PaperSource):
 
         return papers
 
-    def _parse_dblp_hit(self, hit: ET.Element) -> Optional[Paper]:
+    def _parse_dblp_hit(self, hit: ET.Element) -> Paper | None:
         """Parse a dblp hit element into a Paper object."""
         try:
             # Extract basic information from info element
@@ -382,6 +382,6 @@ if __name__ == "__main__":
         print(f"\n{i+1}. {paper.title}")
         print(f"   Authors: {', '.join(paper.authors[:3])}{'...' if len(paper.authors) > 3 else ''}")
         print(f"   DOI: {paper.doi}")
-        print(f"   Year: {paper.extra.get('year', 'N/A')}")
-        print(f"   Venue: {paper.extra.get('venue', 'N/A')}")
+        print(f"   Year: {(paper.extra or {}).get('year', 'N/A')}")
+        print(f"   Venue: {(paper.extra or {}).get('venue', 'N/A')}")
         print(f"   URL: {paper.url}")

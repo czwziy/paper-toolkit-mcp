@@ -1,0 +1,28 @@
+# Bandit 安全扫描配置
+# 调用：bandit -r paper_toolkit_mcp -c .harness/constraints/security/bandit.yaml
+# 规则依据：.harness/constraints/contracts.md
+
+# 测试目录不扫（测试中允许 assert / 硬编码占位密钥）
+exclude_dirs:
+  - tests
+  - build
+  - dist
+  - paper_cache
+  - csl
+
+# 跳过的规则（带原因）
+# 以下规则经评估后确认可接受跳过（非 TODO，已审查）
+skips:
+  - B101    # assert_used — 工具中 assert 用于不变量检查，可接受
+  - B112    # try_except_continue — 多 parser/格式尝试-跳过模式（openaire/pubmed），可接受
+  - B311    # blacklist/random — random.choice 用于选 User-Agent，非 crypto 场景，可接受
+  - B404    # blacklist/subprocess — pandoc_helper.py 合法调用 pandoc
+  - B603    # subprocess_without_shell_equals_true — pandoc_helper 用 shell=False 安全调用
+  - B607    # partial_process_path — pandoc 路径经 shutil.which 解析，非硬编码
+
+# 已修复（从 skips 移除）：
+#   B108 hardcoded_tmp_directory — 改用 tempfile.gettempdir()
+#   B110 try_except_pass — 改为 except Exception as e + logger.warning
+#   B113 request_without_timeout — arxiv.py download_pdf 加 timeout=30
+#   B314/B405 xml.etree — 全部迁移到 defusedxml（防 XXE）
+#   B324 hashlib md5 — 加 usedforsecurity=False 参数

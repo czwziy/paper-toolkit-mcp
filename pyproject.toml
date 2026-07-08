@@ -44,7 +44,20 @@ dependencies = [
     "mcp[cli]>=1.6.0",
     "beautifulsoup4>=4.12.0",
     "lxml>=4.9.0",
+    "defusedxml>=0.7",
     "httpx[socks]>=0.28.1",
+]
+
+# 开发依赖：lint / 类型 / 测试 / 架构 / 安全
+# 安装：pip install -e ".[dev]"
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "import-linter>=2.0",
+    "bandit>=1.7",
 ]
 
 [project.urls]
@@ -58,3 +71,109 @@ paper-toolkit = "paper_toolkit_mcp.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["paper_toolkit_mcp"]
+
+# ───────────────────────────────────────────────────────────────────
+# Lint / 代码风格 — ruff
+# 规则与"为什么"参见 .harness/constraints/contracts.md
+# ───────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["paper_cache", "build", "dist", "csl"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes (unused imports, undefined names...)
+    "I",    # isort (import 顺序)
+    "UP",   # pyupgrade (旧语法升级)
+    "B",    # flake8-bugbear (常见 bug 模式)
+]
+ignore = [
+    "E501",   # 行长由 formatter 处理（line-length=120）
+    "B008",   # 默认参数中调用函数 — requests.Session() 模式需要
+    # 以下为初始门禁的临时豁免，待渐进收紧时修复（见 .harness/constraints/contracts.md）
+    "B904",   # except 中 raise 缺 `from err`/`from None` — 13 处需逐个判断语义
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]   # 测试中允许 assert
+"tests/integration/*" = ["E402"]   # 集成测试可延迟 import
+
+# ───────────────────────────────────────────────────────────────────
+# 类型检查 — mypy
+# paper_toolkit_mcp/ 全量检查；现有未注解函数暂不强制（disallow_untyped_defs=false）
+# 后续逐步收紧，见 .harness/constraints/contracts.md
+# ───────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_configs = true
+# 收紧配置：107 处历史类型问题已清零，启用以下检查
+no_implicit_optional = true
+warn_unreachable = true
+strict_equality = true
+# 渐进收紧计划见 .harness/constraints/contracts.md
+# 下一阶段将启用：disallow_untyped_defs / strict（待全部函数补全注解）
+
+# 第三方库缺类型存根：忽略
+[[tool.mypy.overrides]]
+module = ["feedparser.*", "pypdf.*", "bs4.*", "lxml.*"]
+ignore_missing_imports = true
+
+# ───────────────────────────────────────────────────────────────────
+# 测试 — pytest + coverage
+# CI 默认只跑 tests/unit（hermetic）；tests/integration 需网络，手动触发
+# ───────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests/unit"]
+addopts = "-q --strict-markers"
+markers = [
+    "integration: tests requiring network access; NOT run in CI default",
+]
+
+[tool.coverage.run]
+source = ["paper_toolkit_mcp"]
+omit = ["tests/*", "*/__init__.py", "*/__main__.py"]
+branch = true
+
+[tool.coverage.report]
+# 当前 21%（历史测试债务）；50% 为目标，渐进提升
+# 渐进收紧计划见 .harness/constraints/contracts.md
+fail_under = 20
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+# ───────────────────────────────────────────────────────────────────
+# 架构约束 — import-linter
+# 强制 paper_toolkit_mcp 分层依赖方向单向。
+# 违规消息指向 .harness/specs/architecture/boundaries.md
+# ───────────────────────────────────────────────────────────────────
+[tool.importlinter]
+root_packages = ["paper_toolkit_mcp"]
+
+[[tool.importlinter.contracts]]
+name = "Backend layer architecture（依赖方向单向，禁止反向依赖）"
+type = "layers"
+# 同层多模块用 `|` 分隔（独立：互不依赖）；详见 importlinter/contracts/layers.py
+layers = [
+    "paper_toolkit_mcp.server | paper_toolkit_mcp.cli",
+    "paper_toolkit_mcp.academic_platforms",
+    "paper_toolkit_mcp.reference | paper_toolkit_mcp.pandoc_helper | paper_toolkit_mcp.cache | paper_toolkit_mcp.utils | paper_toolkit_mcp.config | paper_toolkit_mcp.paper",
+]
+ignore_imports = [
+    "paper_toolkit_mcp -> paper_toolkit_mcp.config",
+]
+
+# ───────────────────────────────────────────────────────────────────
+# 安全 — bandit
+# 配置文件单独放 .harness/constraints/security/bandit.yaml
+# ───────────────────────────────────────────────────────────────────
