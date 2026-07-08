@@ -88,8 +88,8 @@ class BASESearcher(OAIPMHSearcher):
         # Subject filter
         if 'subject' in filters and filters['subject']:
             subject_lower = filters['subject'].lower()
-            in_categories = any(subject_lower in cat.lower() for cat in paper.categories)
-            in_keywords = any(subject_lower in kw.lower() for kw in paper.keywords)
+            in_categories = any(subject_lower in cat.lower() for cat in (paper.categories or []))
+            in_keywords = any(subject_lower in kw.lower() for kw in (paper.keywords or []))
             if not in_categories and not in_keywords:
                 return False
 

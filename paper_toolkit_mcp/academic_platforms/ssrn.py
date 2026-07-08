@@ -21,6 +21,7 @@ import logging
 import os
 import re
 import time
+from datetime import datetime
 from typing import Any
 from urllib.parse import urljoin
 
@@ -271,7 +272,7 @@ class SSRNSearcher(PaperSource):
 
         for selector in link_candidates:
             for anchor in soup.select(selector):
-                href = (anchor.get("href") or "").strip()
+                href = (str(anchor.get("href") or "")).strip()
                 if not href:
                     continue
 
@@ -335,7 +336,8 @@ class SSRNSearcher(PaperSource):
                 or block.select_one("span.author-name")
                 or block.select_one(".srp-authors")
             )
-            authors = authors_tag.get_text(separator=", ", strip=True) if authors_tag else ""
+            authors = authors_tag.get_text(separator=", ", strip=True).split(", ") if authors_tag else []
+            authors = [a for a in authors if a]
 
             # Abstract
             abstract_tag = (
@@ -347,7 +349,15 @@ class SSRNSearcher(PaperSource):
 
             # Date
             date_tag = block.select_one(".date") or block.select_one("span.date") or block.select_one(".srp-date")
-            pub_date = date_tag.get_text(strip=True) if date_tag else ""
+            pub_date_str = date_tag.get_text(strip=True) if date_tag else ""
+            pub_date: datetime | None = None
+            if pub_date_str:
+                for fmt in ("%Y-%m-%d", "%B %Y", "%Y", "%b %Y", "%d %B %Y"):
+                    try:
+                        pub_date = datetime.strptime(pub_date_str, fmt)
+                        break
+                    except ValueError:
+                        continue
 
             return Paper(
                 paper_id=paper_id or f"ssrn:{hash(raw_url)}",

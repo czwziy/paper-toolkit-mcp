@@ -156,12 +156,13 @@ async def cmd_search(args: argparse.Namespace) -> int:
     source_counts: dict[str, int] = {}
 
     for name, result in zip(names, results, strict=False):
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             errors[name] = str(result)
             source_counts[name] = 0
         else:
-            source_counts[name] = len(result)
-            for p in result:
+            papers_list: list[dict[str, Any]] = result
+            source_counts[name] = len(papers_list)
+            for p in papers_list:
                 if not p.get("source"):
                     p["source"] = name
                 merged.append(p)

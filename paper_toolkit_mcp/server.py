@@ -120,7 +120,7 @@ _acm_api_key = get_env("ACM_API_KEY", "")
 
 if _ieee_api_key:
     from .academic_platforms.ieee import IEEESearcher
-    ieee_searcher = IEEESearcher()
+    ieee_searcher: IEEESearcher | None = IEEESearcher()
     ALL_SOURCES.append("ieee")
     logger.info("IEEE Xplore enabled via configured environment key.")
 else:
@@ -128,7 +128,7 @@ else:
 
 if _acm_api_key:
     from .academic_platforms.acm import ACMSearcher
-    acm_searcher = ACMSearcher()
+    acm_searcher: ACMSearcher | None = ACMSearcher()
     ALL_SOURCES.append("acm")
     logger.info("ACM Digital Library enabled via configured environment key.")
 else:
@@ -337,13 +337,14 @@ async def search_papers(
     merged_papers: list[dict[str, Any]] = []
 
     for source_name, output in zip(source_names, source_outputs, strict=False):
-        if isinstance(output, Exception):
+        if isinstance(output, BaseException):
             errors[source_name] = str(output)
             source_results[source_name] = 0
             continue
 
-        source_results[source_name] = len(output)
-        for paper in output:
+        papers_list: list[dict[str, Any]] = output
+        source_results[source_name] = len(papers_list)
+        for paper in papers_list:
             if not paper.get("source"):
                 paper["source"] = source_name
             merged_papers.append(paper)
@@ -1406,8 +1407,8 @@ async def process_manuscript(
     citation_style: str = "gb7714",
     output_dir: str | None = None,
     generate_docx: bool = True,
-    generate_bibtex: bool = True,
-    generate_ris: bool = True,
+    include_bibtex: bool = True,
+    include_ris: bool = True,
     cache_ttl_hours: int = 24,
 ) -> dict[str, Any]:
     """Process a Markdown manuscript with citation placeholders and generate formatted outputs.
