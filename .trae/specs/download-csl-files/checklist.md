@@ -1,6 +1,0 @@
-- [ ] csl directory exists at d:\Codes\paper-toolkit-mcp\csl\
-- [ ] chinese-gb7714-2015-numeric.csl exists and is valid CSL XML
-- [ ] apa.csl exists and is valid CSL XML
-- [ ] ieee.csl exists and is valid CSL XML
-- [ ] vancouver.csl exists and is valid CSL XML
-- [ ] harvard-cite-them-right.csl exists and is valid CSL XML

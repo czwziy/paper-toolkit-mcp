@@ -11,27 +11,15 @@ import sys
 from typing import Any
 
 from .academic_platforms.arxiv import ArxivSearcher
-from .academic_platforms.base_search import BASESearcher
-from .academic_platforms.biorxiv import BioRxivSearcher
-from .academic_platforms.citeseerx import CiteSeerXSearcher
-from .academic_platforms.core import CORESearcher
 from .academic_platforms.crossref import CrossRefSearcher
 from .academic_platforms.dblp import DBLPSearcher
-from .academic_platforms.doaj import DOAJSearcher
-from .academic_platforms.europepmc import EuropePMCSearcher
-from .academic_platforms.google_scholar import GoogleScholarSearcher
-from .academic_platforms.hal import HALSearcher
-from .academic_platforms.iacr import IACRSearcher
 from .academic_platforms.medrxiv import MedRxivSearcher
-from .academic_platforms.openaire import OpenAiresearcher
 from .academic_platforms.openalex import OpenAlexSearcher
 from .academic_platforms.pmc import PMCSearcher
 from .academic_platforms.pubmed import PubMedSearcher
 from .academic_platforms.semantic import SemanticSearcher
-from .academic_platforms.ssrn import SSRNSearcher
-from .academic_platforms.unpaywall import UnpaywallResolver, UnpaywallSearcher
-from .academic_platforms.zenodo import ZenodoSearcher
 from .config import get_env, get_work_dir
+from .storage import PaperStorage, _paper_dedup_key
 
 # ---------------------------------------------------------------------------
 # Searcher registry
@@ -47,26 +35,12 @@ def _init_searchers() -> None:
 
     SEARCHERS["arxiv"] = ArxivSearcher()
     SEARCHERS["pubmed"] = PubMedSearcher()
-    SEARCHERS["biorxiv"] = BioRxivSearcher()
     SEARCHERS["medrxiv"] = MedRxivSearcher()
-    SEARCHERS["google_scholar"] = GoogleScholarSearcher()
-    SEARCHERS["iacr"] = IACRSearcher()
     SEARCHERS["semantic"] = SemanticSearcher()
     SEARCHERS["crossref"] = CrossRefSearcher()
     SEARCHERS["openalex"] = OpenAlexSearcher()
     SEARCHERS["pmc"] = PMCSearcher()
-    SEARCHERS["core"] = CORESearcher()
-    SEARCHERS["europepmc"] = EuropePMCSearcher()
     SEARCHERS["dblp"] = DBLPSearcher()
-    SEARCHERS["openaire"] = OpenAiresearcher()
-    SEARCHERS["citeseerx"] = CiteSeerXSearcher()
-    SEARCHERS["doaj"] = DOAJSearcher()
-    SEARCHERS["base"] = BASESearcher()
-    unpaywall_resolver = UnpaywallResolver()
-    SEARCHERS["unpaywall"] = UnpaywallSearcher(resolver=unpaywall_resolver)
-    SEARCHERS["zenodo"] = ZenodoSearcher()
-    SEARCHERS["hal"] = HALSearcher()
-    SEARCHERS["ssrn"] = SSRNSearcher()
 
     # Optional paid connectors
     ieee_key = get_env("IEEE_API_KEY", "")
@@ -81,10 +55,8 @@ def _init_searchers() -> None:
 
 
 ALL_SOURCES = [
-    "arxiv", "pubmed", "biorxiv", "medrxiv", "google_scholar", "iacr",
-    "semantic", "crossref", "openalex", "pmc", "core", "europepmc",
-    "dblp", "openaire", "citeseerx", "doaj", "base", "zenodo", "hal",
-    "ssrn", "unpaywall",
+    "arxiv", "pubmed", "medrxiv", "semantic", "crossref",
+    "openalex", "pmc", "dblp",
 ]
 
 
@@ -95,26 +67,48 @@ def _parse_sources(sources: str) -> list[str]:
     return [s for s in normalized if s in SEARCHERS]
 
 
-def _paper_unique_key(paper: dict[str, Any]) -> str:
-    doi = (paper.get("doi") or "").strip().lower()
-    if doi:
-        return f"doi:{doi}"
-    title = (paper.get("title") or "").strip().lower()
-    authors = (paper.get("authors") or "").strip().lower()
-    if title:
-        return f"title:{title}|authors:{authors}"
-    return f"id:{(paper.get('paper_id') or '').strip().lower()}"
-
-
 def _dedupe(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    for p in papers:
-        k = _paper_unique_key(p)
-        if k not in seen:
-            seen.add(k)
-            out.append(p)
-    return out
+    """Merge duplicate papers by DOI/title/id, combining complementary fields."""
+    merged: dict[str, dict[str, Any]] = {}
+
+    _merge_fields = (
+        "doi", "paper_id", "title", "authors", "abstract", "published_date",
+        "pdf_url", "url", "updated_date", "categories", "keywords",
+        "references", "extra",
+    )
+
+    for paper in papers:
+        key = _paper_dedup_key(paper)
+        if key not in merged:
+            merged[key] = dict(paper)
+            continue
+
+        existing = merged[key]
+        for field in _merge_fields:
+            new_val = paper.get(field)
+            if not new_val:
+                continue
+            old_val = existing.get(field)
+            if not old_val:
+                existing[field] = new_val
+            elif isinstance(new_val, list) and isinstance(old_val, list):
+                combined = list(dict.fromkeys(old_val + new_val))
+                existing[field] = combined
+
+        if paper.get("source") and paper["source"] not in (existing.get("source") or ""):
+            existing["source"] = f"{existing.get('source', '')},{paper['source']}".strip(",")
+
+        if paper.get("citations", 0) > existing.get("citations", 0):
+            existing["citations"] = paper["citations"]
+
+    deduped = list(merged.values())
+
+    try:
+        storage.upsert_papers(deduped)
+    except Exception:
+        pass
+
+    return deduped
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +124,9 @@ DEFAULT_SAVE_PATH = os.path.join(get_work_dir(), "downloads")
 # Passed explicitly to SearchCache so the cache module stays a pure leaf with
 # no dependency on config (per the layered architecture contract).
 DEFAULT_CACHE_DIR = os.path.join(get_work_dir(), ".paper_cache")
+
+# Unified SQLite storage for paper metadata and local PDF path tracking.
+storage = PaperStorage()
 
 async def _async_search(searcher: Any, query: str, max_results: int, **kwargs) -> list[dict]:
     if kwargs:
@@ -199,9 +196,18 @@ async def cmd_download(args: argparse.Namespace) -> int:
         print(json.dumps({"error": f"Unknown source: {source}", "available": sorted(SEARCHERS.keys())}))
         return 1
 
+    # Check local PDF cache first.
+    dedup_key = _paper_dedup_key({"doi": "", "title": "", "paper_id": args.paper_id})
+    local_pdf = storage.get_local_pdf(dedup_key)
+    if local_pdf:
+        print(json.dumps({"status": "ok", "path": local_pdf, "cached": True}))
+        return 0
+
     searcher = SEARCHERS[source]
     try:
         result = await asyncio.to_thread(searcher.download_pdf, args.paper_id, args.save_path)
+        if isinstance(result, str) and os.path.exists(result):
+            storage.set_local_pdf(dedup_key, result)
         print(json.dumps({"status": "ok", "path": result}))
         return 0
     except Exception as e:
@@ -396,6 +402,19 @@ async def cmd_cache_clear(args: argparse.Namespace) -> int:
     return 0
 
 
+async def cmd_library(args: argparse.Namespace) -> int:
+    """Search or list papers in the local SQLite library."""
+    if args.library_command == "stats":
+        print(json.dumps(storage.get_stats(), indent=2, ensure_ascii=False))
+    elif args.library_command == "search":
+        results = storage.search_local(args.keyword, limit=args.limit)
+        print(json.dumps(results, indent=2, ensure_ascii=False, default=str))
+    elif args.library_command == "list":
+        results = storage.list_papers(source=args.source, limit=args.limit)
+        print(json.dumps(results, indent=2, ensure_ascii=False, default=str))
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
@@ -455,6 +474,17 @@ def build_parser() -> argparse.ArgumentParser:
     cache_sub.add_parser("list", help="List cached items")
     cache_sub.add_parser("clear", help="Clear all cache")
 
+    # library (SQLite)
+    p_lib = sub.add_parser("library", help="Manage local paper library (SQLite)")
+    lib_sub = p_lib.add_subparsers(dest="library_command")
+    lib_sub.add_parser("stats", help="Show library statistics")
+    p_lib_search = lib_sub.add_parser("search", help="Search local library by keyword")
+    p_lib_search.add_argument("keyword", help="Search keyword")
+    p_lib_search.add_argument("-n", "--limit", type=int, default=50, help="Max results")
+    p_lib_list = lib_sub.add_parser("list", help="List papers in library")
+    p_lib_list.add_argument("-s", "--source", default="", help="Filter by source")
+    p_lib_list.add_argument("-n", "--limit", type=int, default=100, help="Max results")
+
     return parser
 
 
@@ -477,6 +507,12 @@ def main() -> None:
             exit_code = asyncio.run(cmd_cache_clear(args))
         else:
             parser.parse_args(["cache", "--help"])
+            exit_code = 0
+    elif args.command == "library":
+        if args.library_command in ("stats", "search", "list"):
+            exit_code = asyncio.run(cmd_library(args))
+        else:
+            parser.parse_args(["library", "--help"])
             exit_code = 0
     else:
         exit_code = asyncio.run(dispatch[args.command](args))
