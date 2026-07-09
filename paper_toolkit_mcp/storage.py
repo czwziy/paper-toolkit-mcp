@@ -1,13 +1,16 @@
-"""SQLite-backed unified paper storage with PDF path tracking.
+"""SQLite-backed unified paper storage with cite_key and PDF path tracking.
 
-Replaces the scattered JSON cache for paper metadata. All search results
-are upserted into a single SQLite database under ``WORK_DIR/papers.db``,
-enabling cross-query lookup by DOI/title and deduplication across sessions.
+All search results are upserted into a single SQLite database under
+``WORK_DIR/papers.db``. Each paper gets a short, opaque ``cite_key``
+(3-letter random, e.g. ``Kxq``) that AI uses for citation — it never
+touches DOI/paper_id directly.
 """
 from __future__ import annotations
 
 import os
+import random
 import sqlite3
+import string
 from datetime import datetime
 from typing import Any
 
@@ -17,7 +20,7 @@ DEFAULT_DB_PATH = os.path.join(get_work_dir(), "papers.db")
 
 
 def _paper_dedup_key(paper: dict[str, Any]) -> str:
-    """Generate a stable dedup key following the same logic as _paper_unique_key."""
+    """Generate a stable dedup key from DOI > title+authors > paper_id."""
     doi = (paper.get("doi") or "").strip().lower()
     if doi:
         return f"doi:{doi}"
@@ -28,8 +31,22 @@ def _paper_dedup_key(paper: dict[str, Any]) -> str:
     return f"id:{(paper.get('paper_id') or '').strip().lower()}"
 
 
+def _generate_cite_key(existing_keys: set[str]) -> str:
+    """Generate a unique 3-letter random cite_key (a-zA-Z).
+
+    Upgrades to 4 letters if 3-letter space is exhausted (52^3 = 140 608).
+    """
+    chars = string.ascii_letters
+    for length in (3, 4, 5):
+        for _ in range(50_000):
+            key = "".join(random.choices(chars, k=length))
+            if key not in existing_keys:
+                return key
+    raise RuntimeError("cite_key space exhausted (tried up to 5 letters)")
+
+
 class PaperStorage:
-    """SQLite storage for paper metadata, local PDF paths, and full text."""
+    """SQLite storage for paper metadata, cite_keys, local PDFs, and full text."""
 
     def __init__(self, db_path: str | None = None) -> None:
         self.db_path = db_path or DEFAULT_DB_PATH
@@ -38,6 +55,7 @@ class PaperStorage:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._init_db()
+        self._backfill_cite_keys()
 
     def _init_db(self) -> None:
         self._conn.executescript(
@@ -45,6 +63,7 @@ class PaperStorage:
             CREATE TABLE IF NOT EXISTS papers (
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 dedup_key       TEXT UNIQUE NOT NULL,
+                cite_key        TEXT UNIQUE,
                 doi             TEXT,
                 paper_id        TEXT NOT NULL,
                 title           TEXT NOT NULL,
@@ -64,20 +83,51 @@ class PaperStorage:
                 fulltext        TEXT,
                 fetched_at      TEXT NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS idx_doi    ON papers(doi);
-            CREATE INDEX IF NOT EXISTS idx_title  ON papers(title);
-            CREATE INDEX IF NOT EXISTS idx_source ON papers(source);
-            CREATE INDEX IF NOT EXISTS idx_pdf    ON papers(local_pdf_path);
+            CREATE INDEX IF NOT EXISTS idx_doi     ON papers(doi);
+            CREATE INDEX IF NOT EXISTS idx_title   ON papers(title);
+            CREATE INDEX IF NOT EXISTS idx_source  ON papers(source);
+            CREATE INDEX IF NOT EXISTS idx_pdf     ON papers(local_pdf_path);
             """
         )
+        # Migration: add cite_key column if missing (for existing DBs)
+        cols = {row["name"] for row in self._conn.execute("PRAGMA table_info(papers)")}
+        if "cite_key" not in cols:
+            self._conn.execute("ALTER TABLE papers ADD COLUMN cite_key TEXT")
+            self._conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_cite_key ON papers(cite_key)")
+        else:
+            self._conn.execute("CREATE INDEX IF NOT EXISTS idx_cite_key ON papers(cite_key)")
+        self._conn.commit()
+
+    def _backfill_cite_keys(self) -> None:
+        """Assign cite_key to existing rows that don't have one."""
+        rows = self._conn.execute(
+            "SELECT id FROM papers WHERE cite_key IS NULL OR cite_key = ''"
+        ).fetchall()
+        if not rows:
+            return
+        existing = {
+            r["cite_key"]
+            for r in self._conn.execute("SELECT cite_key FROM papers WHERE cite_key IS NOT NULL")
+            if r["cite_key"]
+        }
+        for row in rows:
+            key = _generate_cite_key(existing)
+            self._conn.execute(
+                "UPDATE papers SET cite_key = ? WHERE id = ?", (key, row["id"])
+            )
+            existing.add(key)
         self._conn.commit()
 
     def upsert_paper(self, paper: dict[str, Any]) -> bool:
-        """Insert or update a single paper. Returns True if a new row was inserted."""
+        """Insert or update a single paper. Returns True if newly inserted.
+
+        Auto-assigns a cite_key on first insert. Papers without abstract
+        should be filtered by the caller before calling this method.
+        """
         key = _paper_dedup_key(paper)
         now = datetime.now().isoformat()
         row = self._conn.execute(
-            "SELECT id FROM papers WHERE dedup_key = ?", (key,)
+            "SELECT id, cite_key FROM papers WHERE dedup_key = ?", (key,)
         ).fetchone()
 
         doi = (paper.get("doi") or "").strip()
@@ -110,7 +160,15 @@ class PaperStorage:
             self._conn.execute(
                 f"UPDATE papers SET {set_clauses} WHERE id = ?", values
             )
+            cite_key = row["cite_key"]
         else:
+            existing_keys = {
+                r["cite_key"]
+                for r in self._conn.execute("SELECT cite_key FROM papers WHERE cite_key IS NOT NULL")
+                if r["cite_key"]
+            }
+            cite_key = _generate_cite_key(existing_keys)
+            fields["cite_key"] = cite_key
             cols = ", ".join(fields.keys())
             placeholders = ", ".join("?" for _ in fields)
             self._conn.execute(
@@ -118,6 +176,7 @@ class PaperStorage:
                 list(fields.values()),
             )
         self._conn.commit()
+        paper["cite_key"] = cite_key
         return row is None
 
     def upsert_papers(self, papers: list[dict[str, Any]]) -> int:
@@ -127,6 +186,12 @@ class PaperStorage:
             if self.upsert_paper(p):
                 new_count += 1
         return new_count
+
+    def get_by_cite_key(self, cite_key: str) -> dict[str, Any] | None:
+        row = self._conn.execute(
+            "SELECT * FROM papers WHERE cite_key = ? LIMIT 1", (cite_key,)
+        ).fetchone()
+        return dict(row) if row else None
 
     def get_by_doi(self, doi: str) -> dict[str, Any] | None:
         row = self._conn.execute(

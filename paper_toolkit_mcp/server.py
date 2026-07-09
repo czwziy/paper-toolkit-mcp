@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import re
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -92,6 +93,15 @@ ALL_SOURCES = [
     "dblp",
 ]
 
+# Preset source groups — AI can pass "medical" / "cs" / "metadata" instead of
+# listing individual sources. Resolved by _parse_sources.
+SOURCE_GROUPS: dict[str, list[str]] = {
+    "all": ALL_SOURCES,
+    "medical": ["pubmed", "pmc", "medrxiv"],
+    "cs": ["arxiv", "dblp", "semantic"],
+    "metadata": ["crossref", "openalex"],
+}
+
 
 # ---------------------------------------------------------------------------
 # Optional paid-platform connectors (disabled by default)
@@ -122,13 +132,80 @@ def _parse_sources(sources: str) -> list[str]:
     if not sources or sources.strip().lower() == "all":
         return ALL_SOURCES
 
-    normalized = [part.strip().lower() for part in sources.split(",") if part.strip()]
-    return [source for source in normalized if source in ALL_SOURCES]
+    normalized = sources.strip().lower()
+    # Check if it's a preset group name
+    if normalized in SOURCE_GROUPS:
+        return [s for s in SOURCE_GROUPS[normalized] if s in ALL_SOURCES]
+
+    # Otherwise treat as comma-separated list
+    parts = [part.strip().lower() for part in sources.split(",") if part.strip()]
+    # Expand any group names within the comma list
+    expanded: list[str] = []
+    for part in parts:
+        if part in SOURCE_GROUPS:
+            expanded.extend(SOURCE_GROUPS[part])
+        else:
+            expanded.append(part)
+    # Dedupe while preserving order, filter to valid sources
+    seen: set[str] = set()
+    result: list[str] = []
+    for s in expanded:
+        if s in ALL_SOURCES and s not in seen:
+            seen.add(s)
+            result.append(s)
+    return result
+
+
+def _filter_by_year(
+    papers: list[dict[str, Any]],
+    year_from: int | None = None,
+    year_to: int | None = None,
+) -> list[dict[str, Any]]:
+    """Filter papers by publication year (post-hoc, works for all sources)."""
+    if not year_from and not year_to:
+        return papers
+    result: list[dict[str, Any]] = []
+    for p in papers:
+        date_str = (p.get("published_date") or "").strip()
+        if not date_str:
+            continue
+        try:
+            year = int(date_str[:4])
+        except (ValueError, IndexError):
+            continue
+        if year_from and year < year_from:
+            continue
+        if year_to and year > year_to:
+            continue
+        result.append(p)
+    return result
+
+
+def _simplify_for_ai(paper: dict[str, Any]) -> dict[str, Any]:
+    """Return only the fields AI needs for writing: cite_key + abstract + title + year + source.
+
+    DOI, paper_id, PDF URL etc. stay in the database — AI never sees them.
+    """
+    date_str = (paper.get("published_date") or "").strip()
+    year = ""
+    if date_str:
+        try:
+            year = int(date_str[:4])
+        except (ValueError, IndexError):
+            pass
+    return {
+        "cite_key": paper.get("cite_key", ""),
+        "title": paper.get("title", ""),
+        "abstract": (paper.get("abstract") or "").strip(),
+        "year": year,
+        "source": paper.get("source", ""),
+    }
 
 
 def _dedupe_papers(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Merge duplicate papers by DOI/title/id, combining complementary fields.
 
+    Papers without abstract are discarded (not stored, not returned).
     When the same paper appears from multiple sources (e.g. arXiv has PDF,
     CrossRef has journal info, Semantic Scholar has citation count), the
     fields are merged instead of discarding duplicates. Results are then
@@ -167,6 +244,9 @@ def _dedupe_papers(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
             existing["citations"] = paper["citations"]
 
     deduped = list(merged.values())
+
+    # Discard papers without abstract — they're useless for AI writing
+    deduped = [p for p in deduped if (p.get("abstract") or "").strip()]
 
     try:
         storage.upsert_papers(deduped)
@@ -257,19 +337,31 @@ async def search_papers(
     query: str,
     max_results_per_source: int = 5,
     sources: str = "all",
-    year: str | None = None,
+    year_from: int | None = None,
+    year_to: int | None = None,
 ) -> dict[str, Any]:
     """Unified top-level search across all configured academic platforms.
+
+    Returns only cite_key + title + abstract + year + source for each paper.
+    Papers without abstract are discarded. Defaults to last 5 years.
 
     Args:
         query: Search query string.
         max_results_per_source: Max results to fetch from each selected source.
-        sources: Comma-separated source names or 'all'.
-            Available: arxiv,pubmed,medrxiv,semantic,crossref,openalex,pmc,dblp
-        year: Optional year filter for Semantic Scholar only.
+        sources: Source names, preset group, or 'all'.
+            Groups: medical (pubmed,pmc,medrxiv), cs (arxiv,dblp,semantic),
+            metadata (crossref,openalex). Or comma-separated individual names.
+        year_from: Earliest publication year (default: current year - 5).
+            Pass 0 to disable year filtering.
+        year_to: Latest publication year (default: none).
     Returns:
-        Aggregated dictionary with per-source stats, errors, and deduplicated papers.
+        Aggregated dict with per-source stats, errors, and simplified papers.
     """
+    if year_from is None:
+        year_from = datetime.now().year - 5
+    elif year_from == 0:
+        year_from = None
+
     selected_sources = _parse_sources(sources)
 
     if not selected_sources:
@@ -292,7 +384,7 @@ async def search_papers(
         elif source == "medrxiv":
             task_map[source] = search_medrxiv(query, max_results_per_source)
         elif source == "semantic":
-            task_map[source] = search_semantic(query, year=year, max_results=max_results_per_source)
+            task_map[source] = search_semantic(query, max_results=max_results_per_source)
         elif source == "crossref":
             task_map[source] = search_crossref(query, max_results=max_results_per_source)
         elif source == "openalex":
@@ -328,7 +420,13 @@ async def search_papers(
                 paper["source"] = source_name
             merged_papers.append(paper)
 
+    # Year filter (post-hoc, uniform across all sources)
+    merged_papers = _filter_by_year(merged_papers, year_from, year_to)
+
     deduped_papers = _dedupe_papers(merged_papers)
+
+    # Simplify for AI: only cite_key + title + abstract + year + source
+    simplified = [_simplify_for_ai(p) for p in deduped_papers]
 
     return {
         "query": query,
@@ -336,14 +434,12 @@ async def search_papers(
         "sources_used": source_names,
         "source_results": source_results,
         "errors": errors,
-        "papers": deduped_papers,
-        "total": len(deduped_papers),
-        "raw_total": len(merged_papers),
+        "papers": simplified,
+        "total": len(simplified),
     }
 
 
 # Tool definitions
-@mcp.tool()
 async def search_arxiv(query: str, max_results: int = 10, sort_by: str = 'relevance', sort_order: str = 'descending') -> list[dict]:
     """Search academic papers from arXiv.
 
@@ -359,7 +455,6 @@ async def search_arxiv(query: str, max_results: int = 10, sort_by: str = 'releva
     return papers if papers else []
 
 
-@mcp.tool()
 async def search_pubmed(query: str, max_results: int = 10, sort: str = 'relevance') -> list[dict]:
     """Search academic papers from PubMed.
 
@@ -374,7 +469,6 @@ async def search_pubmed(query: str, max_results: int = 10, sort: str = 'relevanc
     return papers if papers else []
 
 
-@mcp.tool()
 async def search_medrxiv(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from medRxiv.
 
@@ -392,7 +486,6 @@ async def search_medrxiv(query: str, max_results: int = 10) -> list[dict]:
     return papers if papers else []
 
 
-@mcp.tool()
 async def download_arxiv(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF of an arXiv paper.
 
@@ -405,7 +498,6 @@ async def download_arxiv(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> s
     return await asyncio.to_thread(arxiv_searcher.download_pdf, paper_id, save_path)
 
 
-@mcp.tool()
 async def download_pubmed(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to download PDF of a PubMed paper.
 
@@ -421,7 +513,6 @@ async def download_pubmed(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> 
         return str(e)
 
 
-@mcp.tool()
 async def download_medrxiv(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF of a medRxiv paper.
 
@@ -434,7 +525,6 @@ async def download_medrxiv(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) ->
     return medrxiv_searcher.download_pdf(paper_id, save_path)
 
 
-@mcp.tool()
 async def read_arxiv_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from an arXiv paper PDF.
 
@@ -451,7 +541,6 @@ async def read_arxiv_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) ->
         return ""
 
 
-@mcp.tool()
 async def read_pubmed_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a PubMed paper.
 
@@ -464,7 +553,6 @@ async def read_pubmed_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -
     return pubmed_searcher.read_paper(paper_id, save_path)
 
 
-@mcp.tool()
 async def read_medrxiv_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Read and extract text content from a medRxiv paper PDF.
 
@@ -481,7 +569,6 @@ async def read_medrxiv_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) 
         return ""
 
 
-@mcp.tool()
 async def search_semantic(query: str, year: str | None = None, max_results: int = 10) -> list[dict]:
     """Search academic papers from Semantic Scholar.
 
@@ -499,7 +586,6 @@ async def search_semantic(query: str, year: str | None = None, max_results: int 
     return papers if papers else []
 
 
-@mcp.tool()
 async def download_semantic(paper_id: str, save_path: str = "./downloads") -> str:
     """Download PDF of a Semantic Scholar paper.
 
@@ -520,7 +606,6 @@ async def download_semantic(paper_id: str, save_path: str = "./downloads") -> st
     return semantic_searcher.download_pdf(paper_id, save_path)
 
 
-@mcp.tool()
 async def read_semantic_paper(paper_id: str, save_path: str = "./downloads") -> str:
     """Read and extract text content from a Semantic Scholar paper.
 
@@ -545,7 +630,6 @@ async def read_semantic_paper(paper_id: str, save_path: str = "./downloads") -> 
         return ""
 
 
-@mcp.tool()
 async def search_crossref(
     query: str,
     max_results: int = 10,
@@ -590,7 +674,6 @@ async def get_crossref_paper_by_doi(doi: str) -> dict:
     return paper.to_dict() if paper else {}
 
 
-@mcp.tool()
 async def download_crossref(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to download PDF of a CrossRef paper.
 
@@ -728,6 +811,87 @@ async def download_with_fallback(
 
 
 @mcp.tool()
+async def download_by_cite_key(
+    cite_key: str, save_path: str = DEFAULT_SAVE_PATH
+) -> str:
+    """Download a paper's PDF using its cite_key.
+
+    Looks up the paper in the local library by cite_key, checks for an
+    existing local PDF, then falls back to download_with_fallback.
+
+    Args:
+        cite_key: The paper's cite_key (e.g. 'Kxq') from search results.
+        save_path: Directory to save the PDF (default: <WORK_DIR>/downloads).
+    Returns:
+        Path to the downloaded PDF, or an error message.
+    """
+    paper = storage.get_by_cite_key(cite_key)
+    if not paper:
+        return f"Error: cite_key '{cite_key}' not found in library. Search for the paper first."
+
+    # Check local PDF cache
+    dedup_key = paper["dedup_key"]
+    local_pdf = storage.get_local_pdf(dedup_key)
+    if local_pdf:
+        return local_pdf
+
+    # Route to download_with_fallback using stored metadata
+    source = (paper.get("source") or "").split(",")[0].strip()
+    return await download_with_fallback(
+        source=source,
+        paper_id=paper.get("paper_id", ""),
+        doi=paper.get("doi", ""),
+        title=paper.get("title", ""),
+        save_path=save_path,
+    )
+
+
+@mcp.tool()
+async def read_by_cite_key(
+    cite_key: str, save_path: str = DEFAULT_SAVE_PATH
+) -> str:
+    """Download and extract full text from a paper using its cite_key.
+
+    Checks for cached full text first, then downloads the PDF and extracts
+    text via pypdf. The extracted text is cached in the local library.
+
+    Args:
+        cite_key: The paper's cite_key (e.g. 'Kxq') from search results.
+        save_path: Directory for PDF download (default: <WORK_DIR>/downloads).
+    Returns:
+        The extracted text content, or an error message.
+    """
+    paper = storage.get_by_cite_key(cite_key)
+    if not paper:
+        return f"Error: cite_key '{cite_key}' not found in library."
+
+    dedup_key = paper["dedup_key"]
+
+    # Check cached full text
+    cached_text = storage.get_fulltext(dedup_key)
+    if cached_text:
+        return cached_text
+
+    # Download PDF
+    pdf_path = await download_by_cite_key(cite_key, save_path)
+    if not os.path.exists(pdf_path):
+        return pdf_path  # error message from download_by_cite_key
+
+    # Extract text
+    try:
+        from pypdf import PdfReader
+
+        reader = PdfReader(pdf_path)
+        text = "\n".join(
+            page.extract_text() for page in reader.pages if page.extract_text()
+        )
+        storage.set_fulltext(dedup_key, text)
+        return text
+    except Exception as exc:
+        logger.warning("Failed to extract text from %s: %s", pdf_path, exc)
+        return f"PDF downloaded to {pdf_path} but text extraction failed: {exc}"
+
+
 async def read_crossref_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to read and extract text content from a CrossRef paper.
 
@@ -744,7 +908,6 @@ async def read_crossref_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH)
     return crossref_searcher.read_paper(paper_id, save_path)
 
 
-@mcp.tool()
 async def search_openalex(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from OpenAlex.
 
@@ -758,7 +921,6 @@ async def search_openalex(query: str, max_results: int = 10) -> list[dict]:
     return papers if papers else []
 
 
-@mcp.tool()
 async def search_pmc(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from PubMed Central (PMC).
 
@@ -772,7 +934,6 @@ async def search_pmc(query: str, max_results: int = 10) -> list[dict]:
     return papers if papers else []
 
 
-@mcp.tool()
 async def search_dblp(query: str, max_results: int = 10) -> list[dict]:
     """Search academic papers from dblp computer science bibliography.
 
@@ -786,7 +947,6 @@ async def search_dblp(query: str, max_results: int = 10) -> list[dict]:
     return papers if papers else []
 
 
-@mcp.tool()
 async def read_dblp_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to read and extract text content from a dblp paper.
 
@@ -802,7 +962,6 @@ async def read_dblp_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> 
     return dblp_searcher.read_paper(paper_id, save_path)
 
 
-@mcp.tool()
 async def download_dblp(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from dblp.
 
@@ -818,7 +977,6 @@ async def download_dblp(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> st
     return dblp_searcher.download_pdf(paper_id, save_path)
 
 
-@mcp.tool()
 async def read_openalex_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Attempt to read and extract text content from an OpenAlex paper.
 
@@ -831,7 +989,6 @@ async def read_openalex_paper(paper_id: str, save_path: str = DEFAULT_SAVE_PATH)
     return openalex_searcher.read_paper(paper_id, save_path)
 
 
-@mcp.tool()
 async def download_openalex(paper_id: str, save_path: str = DEFAULT_SAVE_PATH) -> str:
     """Download PDF for a paper from OpenAlex.
 

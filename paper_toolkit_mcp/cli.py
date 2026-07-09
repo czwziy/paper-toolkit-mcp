@@ -59,16 +59,79 @@ ALL_SOURCES = [
     "openalex", "pmc", "dblp",
 ]
 
+SOURCE_GROUPS: dict[str, list[str]] = {
+    "all": ALL_SOURCES,
+    "medical": ["pubmed", "pmc", "medrxiv"],
+    "cs": ["arxiv", "dblp", "semantic"],
+    "metadata": ["crossref", "openalex"],
+}
+
 
 def _parse_sources(sources: str) -> list[str]:
     if not sources or sources.strip().lower() == "all":
         return [s for s in ALL_SOURCES if s in SEARCHERS]
-    normalized = [p.strip().lower() for p in sources.split(",") if p.strip()]
-    return [s for s in normalized if s in SEARCHERS]
+    normalized = sources.strip().lower()
+    if normalized in SOURCE_GROUPS:
+        return [s for s in SOURCE_GROUPS[normalized] if s in SEARCHERS]
+    parts = [p.strip().lower() for p in sources.split(",") if p.strip()]
+    expanded: list[str] = []
+    for part in parts:
+        if part in SOURCE_GROUPS:
+            expanded.extend(SOURCE_GROUPS[part])
+        else:
+            expanded.append(part)
+    seen: set[str] = set()
+    result: list[str] = []
+    for s in expanded:
+        if s in SEARCHERS and s not in seen:
+            seen.add(s)
+            result.append(s)
+    return result
+
+
+def _filter_by_year(
+    papers: list[dict[str, Any]],
+    year_from: int | None = None,
+    year_to: int | None = None,
+) -> list[dict[str, Any]]:
+    if not year_from and not year_to:
+        return papers
+    result: list[dict[str, Any]] = []
+    for p in papers:
+        date_str = (p.get("published_date") or "").strip()
+        if not date_str:
+            continue
+        try:
+            year = int(date_str[:4])
+        except (ValueError, IndexError):
+            continue
+        if year_from and year < year_from:
+            continue
+        if year_to and year > year_to:
+            continue
+        result.append(p)
+    return result
+
+
+def _simplify_for_ai(paper: dict[str, Any]) -> dict[str, Any]:
+    date_str = (paper.get("published_date") or "").strip()
+    year = ""
+    if date_str:
+        try:
+            year = int(date_str[:4])
+        except (ValueError, IndexError):
+            pass
+    return {
+        "cite_key": paper.get("cite_key", ""),
+        "title": paper.get("title", ""),
+        "abstract": (paper.get("abstract") or "").strip(),
+        "year": year,
+        "source": paper.get("source", ""),
+    }
 
 
 def _dedupe(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Merge duplicate papers by DOI/title/id, combining complementary fields."""
+    """Merge duplicate papers, discard those without abstract, upsert to storage."""
     merged: dict[str, dict[str, Any]] = {}
 
     _merge_fields = (
@@ -102,6 +165,9 @@ def _dedupe(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
             existing["citations"] = paper["citations"]
 
     deduped = list(merged.values())
+
+    # Discard papers without abstract
+    deduped = [p for p in deduped if (p.get("abstract") or "").strip()]
 
     try:
         storage.upsert_papers(deduped)
@@ -147,13 +213,18 @@ async def cmd_search(args: argparse.Namespace) -> int:
         print(json.dumps({"error": "No valid sources selected", "available": sorted(SEARCHERS.keys())}))
         return 1
 
+    # Default: last 5 years. year_from=0 disables.
+    year_from = args.year_from
+    if year_from is None:
+        from datetime import datetime as _dt
+        year_from = _dt.now().year - 5
+    elif year_from == 0:
+        year_from = None
+
     tasks = {}
     for src in selected:
         searcher = SEARCHERS[src]
-        extra = {}
-        if src == "semantic" and args.year:
-            extra["year"] = args.year
-        tasks[src] = _async_search(searcher, args.query, args.max_results, **extra)
+        tasks[src] = _async_search(searcher, args.query, args.max_results)
 
     names = list(tasks.keys())
     results = await asyncio.gather(*tasks.values(), return_exceptions=True)
@@ -174,17 +245,19 @@ async def cmd_search(args: argparse.Namespace) -> int:
                     p["source"] = name
                 merged.append(p)
 
+    merged = _filter_by_year(merged, year_from, args.year_to)
     deduped = _dedupe(merged)
+    simplified = [_simplify_for_ai(p) for p in deduped]
 
     output = {
         "query": args.query,
         "sources_used": names,
         "source_results": source_counts,
         "errors": errors,
-        "total": len(deduped),
-        "papers": deduped,
+        "total": len(simplified),
+        "papers": simplified,
     }
-    print(json.dumps(output, indent=2, default=str))
+    print(json.dumps(output, indent=2, default=str, ensure_ascii=False))
     return 0
 
 
@@ -226,6 +299,66 @@ async def cmd_read(args: argparse.Namespace) -> int:
     searcher = SEARCHERS[source]
     try:
         text = await asyncio.to_thread(searcher.read_paper, args.paper_id, args.save_path)
+        print(text)
+        return 0
+    except Exception as e:
+        print(json.dumps({"status": "error", "message": str(e)}))
+        return 1
+
+
+async def cmd_download_by_key(args: argparse.Namespace) -> int:
+    paper = storage.get_by_cite_key(args.cite_key.strip())
+    if not paper:
+        print(json.dumps({"error": f"cite_key '{args.cite_key}' not found in library"}))
+        return 1
+
+    dedup_key = paper["dedup_key"]
+    local_pdf = storage.get_local_pdf(dedup_key)
+    if local_pdf:
+        print(json.dumps({"status": "ok", "path": local_pdf, "cached": True}))
+        return 0
+
+    _init_searchers()
+    source = (paper.get("source") or "").split(",")[0].strip()
+    if source not in SEARCHERS:
+        print(json.dumps({"error": f"Source '{source}' not available", "paper_id": paper.get("paper_id", "")}))
+        return 1
+
+    searcher = SEARCHERS[source]
+    try:
+        result = await asyncio.to_thread(searcher.download_pdf, paper["paper_id"], args.save_path)
+        if isinstance(result, str) and os.path.exists(result):
+            storage.set_local_pdf(dedup_key, result)
+        print(json.dumps({"status": "ok", "path": result}))
+        return 0
+    except Exception as e:
+        print(json.dumps({"status": "error", "message": str(e)}))
+        return 1
+
+
+async def cmd_read_by_key(args: argparse.Namespace) -> int:
+    paper = storage.get_by_cite_key(args.cite_key.strip())
+    if not paper:
+        print(json.dumps({"error": f"cite_key '{args.cite_key}' not found in library"}))
+        return 1
+
+    dedup_key = paper["dedup_key"]
+    cached_text = storage.get_fulltext(dedup_key)
+    if cached_text:
+        print(cached_text)
+        return 0
+
+    _init_searchers()
+    source = (paper.get("source") or "").split(",")[0].strip()
+    if source not in SEARCHERS:
+        print(json.dumps({"error": f"Source '{source}' not available"}))
+        return 1
+
+    searcher = SEARCHERS[source]
+    try:
+        text = await asyncio.to_thread(searcher.read_paper, paper["paper_id"], args.save_path)
+        if text:
+            storage.set_fulltext(dedup_key, text)
         print(text)
         return 0
     except Exception as e:
@@ -431,9 +564,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("query", help="Search query")
     p_search.add_argument("-n", "--max-results", type=int, default=5, help="Max results per source (default: 5)")
     p_search.add_argument("-s", "--sources", default="all",
-                          help="Comma-separated sources or 'all' (default: all)")
-    p_search.add_argument("-y", "--year", default=None,
-                          help="Year filter for Semantic Scholar (e.g. '2020', '2018-2022')")
+                          help="Sources: 'all', 'medical', 'cs', 'metadata', or comma-separated names")
+    p_search.add_argument("--year-from", type=int, default=None,
+                          help="Earliest year (default: current-5, pass 0 to disable)")
+    p_search.add_argument("--year-to", type=int, default=None,
+                          help="Latest year")
 
     # download
     p_dl = sub.add_parser("download", help="Download a paper PDF")
@@ -442,12 +577,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_dl.add_argument("-o", "--save-path", default=DEFAULT_SAVE_PATH,
                       help="Save directory (default: <WORK_DIR>/downloads)")
 
+    # download-by-key (recommended way: use cite_key from search results)
+    p_dlk = sub.add_parser("download-by-key", help="Download a paper PDF by cite_key")
+    p_dlk.add_argument("cite_key", help="The cite_key from search results (e.g. Kxq)")
+    p_dlk.add_argument("-o", "--save-path", default=DEFAULT_SAVE_PATH,
+                       help="Save directory (default: <WORK_DIR>/downloads)")
+
     # read
     p_read = sub.add_parser("read", help="Download and extract text from a paper")
     p_read.add_argument("source", help="Source platform (e.g. arxiv, semantic)")
     p_read.add_argument("paper_id", help="Paper identifier")
     p_read.add_argument("-o", "--save-path", default=DEFAULT_SAVE_PATH,
                         help="Save directory (default: <WORK_DIR>/downloads)")
+
+    # read-by-key
+    p_rdk = sub.add_parser("read-by-key", help="Download and extract text by cite_key")
+    p_rdk.add_argument("cite_key", help="The cite_key from search results")
+    p_rdk.add_argument("-o", "--save-path", default=DEFAULT_SAVE_PATH,
+                       help="Save directory (default: <WORK_DIR>/downloads)")
 
     # sources
     sub.add_parser("sources", help="List available sources")
@@ -495,7 +642,9 @@ def main() -> None:
     dispatch = {
         "search": cmd_search,
         "download": cmd_download,
+        "download-by-key": cmd_download_by_key,
         "read": cmd_read,
+        "read-by-key": cmd_read_by_key,
         "sources": cmd_sources,
         "manuscript": cmd_manuscript,
     }
