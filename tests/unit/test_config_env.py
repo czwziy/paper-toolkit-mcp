@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -43,19 +44,27 @@ class TestConfigEnv(unittest.TestCase):
             self.assertEqual(config.get_env("CORE_API_KEY", "default"), "")
 
     def test_loads_from_custom_env_file(self):
-        with tempfile.NamedTemporaryFile("w", suffix=".env", delete=True) as tmp:
-            tmp.write("paper_toolkit_mcp_UNPAYWALL_EMAIL=test@example.com\n")
-            tmp.flush()
+        # Write to a temp dir and CLOSE the file before load_env_file reads it.
+        # NamedTemporaryFile(delete=True) keeps the handle open on Windows,
+        # which locks the file and causes PermissionError when load_env_file
+        # reopens it for reading.
+        tmpdir = tempfile.mkdtemp()
+        try:
+            env_path = os.path.join(tmpdir, "custom.env")
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write("paper_toolkit_mcp_UNPAYWALL_EMAIL=test@example.com\n")
 
             with patch.dict(
                 os.environ,
                 {
-                    "paper_toolkit_mcp_ENV_FILE": tmp.name,
+                    "paper_toolkit_mcp_ENV_FILE": env_path,
                 },
                 clear=True,
             ):
                 config.load_env_file(force=True)
                 self.assertEqual(config.get_env("UNPAYWALL_EMAIL", ""), "test@example.com")
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 if __name__ == "__main__":

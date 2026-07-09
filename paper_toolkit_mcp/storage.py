@@ -76,8 +76,7 @@ class PaperStorage:
                 updated_date    TEXT,
                 categories      TEXT,
                 keywords        TEXT,
-                citations       INTEGER DEFAULT 0,
-                references_ids  TEXT,
+                refs            TEXT,
                 extra           TEXT,
                 local_pdf_path  TEXT,
                 fulltext        TEXT,
@@ -130,7 +129,9 @@ class PaperStorage:
             "SELECT id, cite_key FROM papers WHERE dedup_key = ?", (key,)
         ).fetchone()
 
-        doi = (paper.get("doi") or "").strip()
+        # Normalize DOI to lowercase+strip so get_by_doi (which lowercases the
+        # query) matches consistently — same normalization as _paper_dedup_key.
+        doi = (paper.get("doi") or "").strip().lower()
         if not doi:
             doi = row["doi"] if row else ""
 
@@ -139,26 +140,27 @@ class PaperStorage:
             "doi": doi,
             "paper_id": paper.get("paper_id", ""),
             "title": paper.get("title", ""),
-            "authors": paper.get("authors", ""),
+            "authors": paper.get("authors", "[]"),
             "abstract": paper.get("abstract", ""),
             "published_date": paper.get("published_date", ""),
             "pdf_url": paper.get("pdf_url", ""),
             "url": paper.get("url", ""),
             "source": paper.get("source", ""),
             "updated_date": paper.get("updated_date", ""),
-            "categories": paper.get("categories", ""),
-            "keywords": paper.get("keywords", ""),
-            "citations": int(paper.get("citations", 0) or 0),
-            "references_ids": paper.get("references", ""),
-            "extra": paper.get("extra", ""),
+            "categories": paper.get("categories", "[]"),
+            "keywords": paper.get("keywords", "[]"),
+            "refs": paper.get("references", "[]"),
+            "extra": paper.get("extra", "{}"),
             "fetched_at": now,
         }
 
         if row:
             set_clauses = ", ".join(f"{k} = ?" for k in fields)
             values = list(fields.values()) + [row["id"]]
+            # Column names are hardcoded, not user input — no injection risk
             self._conn.execute(
-                f"UPDATE papers SET {set_clauses} WHERE id = ?", values
+                f"UPDATE papers SET {set_clauses} WHERE id = ?",  # nosec B608
+                values,
             )
             cite_key = row["cite_key"]
         else:
@@ -171,8 +173,9 @@ class PaperStorage:
             fields["cite_key"] = cite_key
             cols = ", ".join(fields.keys())
             placeholders = ", ".join("?" for _ in fields)
+            # Column names are hardcoded, not user input — no injection risk
             self._conn.execute(
-                f"INSERT INTO papers ({cols}) VALUES ({placeholders})",
+                f"INSERT INTO papers ({cols}) VALUES ({placeholders})",  # nosec B608
                 list(fields.values()),
             )
         self._conn.commit()

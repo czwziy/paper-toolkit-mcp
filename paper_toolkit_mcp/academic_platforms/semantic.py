@@ -133,7 +133,6 @@ class SemanticSearcher(PaperSource):
                 source="semantic",
                 categories=categories,
                 doi=doi,
-                citations=item.get("citationCount", 0),
             )
 
         except Exception as e:
@@ -581,7 +580,6 @@ if __name__ == "__main__":
             if paper_details.published_date:
                 print(f"Published Date: {paper_details.published_date}")
             print(f"DOI: {paper_details.doi}")
-            print(f"Citations: {paper_details.citations}")
             print(f"Abstract: {paper_details.abstract[:200]}...")
         else:
             print(f"Could not fetch details for paper {test_paper_id}")

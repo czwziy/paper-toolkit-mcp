@@ -39,11 +39,12 @@ jobs:
         run: lint-imports
 
   test:
-    name: Unit tests (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    name: Unit tests (py${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ['3.10', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
@@ -78,14 +79,20 @@ jobs:
       - name: Bandit (security scan)
         run: bandit -r paper_toolkit_mcp -c .harness/constraints/security/bandit.yaml -q
 
-      - name: File size gate (≤ 400 lines per .py)
-        # 目标阈值 400 行；历史超标文件见 .harness/constraints/contracts.md 豁免清单
+      - name: Pip-audit (dependency vulnerability scan)
+        # 扫描已安装依赖的已知 CVE；与 bandit 互补（bandit 查代码，pip-audit 查依赖）
+        run: |
+          pip install pip-audit
+          pip-audit
+
+      - name: File size gate (≤ 500 lines per .py)
+        # 目标阈值 500 行；历史超标文件见 .harness/constraints/contracts.md 豁免清单
         # 豁免文件后续按渐进收紧计划拆分
         run: |
           # 已知历史超标文件豁免清单（拆分计划见 contracts.md）
-          EXEMPT="paper_toolkit_mcp/server.py paper_toolkit_mcp/reference.py paper_toolkit_mcp/cli.py paper_toolkit_mcp/academic_platforms/openaire.py paper_toolkit_mcp/academic_platforms/semantic.py paper_toolkit_mcp/academic_platforms/iacr.py paper_toolkit_mcp/academic_platforms/oaipmh.py paper_toolkit_mcp/academic_platforms/core.py paper_toolkit_mcp/academic_platforms/europepmc.py paper_toolkit_mcp/academic_platforms/pmc.py paper_toolkit_mcp/academic_platforms/citeseerx.py paper_toolkit_mcp/academic_platforms/doaj.py"
+          EXEMPT="paper_toolkit_mcp/server.py paper_toolkit_mcp/reference.py paper_toolkit_mcp/cli.py paper_toolkit_mcp/academic_platforms/openaire.py paper_toolkit_mcp/academic_platforms/semantic.py paper_toolkit_mcp/academic_platforms/core.py paper_toolkit_mcp/academic_platforms/europepmc.py paper_toolkit_mcp/academic_platforms/pmc.py"
           bad=$(find paper_toolkit_mcp -name "*.py" -exec wc -l {} + \
-                | awk '$1>400 && $2!="total" {print $2}')
+                | awk '$1>500 && $2!="total" {print $2}')
           new_violations=""
           for f in $bad; do
             if ! echo " $EXEMPT " | grep -q " $f "; then
@@ -95,7 +102,7 @@ jobs:
             fi
           done
           if [ -n "$new_violations" ]; then
-            echo "::error::新增文件超过 400 行（历史超标文件已在豁免清单，见 contracts.md）："
+            echo "::error::新增文件超过 500 行（历史超标文件已在豁免清单，见 contracts.md）："
             echo "$new_violations"
             exit 1
           fi

@@ -35,7 +35,6 @@ class TestCrossRefSearcher(unittest.TestCase):
             print(f"{i}. {paper.title} (DOI: {paper.doi})")
             print(f"   Authors: {', '.join(paper.authors[:2])}{'...' if len(paper.authors) > 2 else ''}")
             print(f"   Published: {paper.published_date.year if paper.published_date else 'N/A'}")
-            print(f"   Citations: {paper.citations}")
             if paper.extra:
                 print(f"   Publisher: {paper.extra.get('publisher', 'N/A')}")
                 print(f"   Type: {paper.extra.get('crossref_type', 'N/A')}")

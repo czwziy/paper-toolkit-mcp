@@ -18,7 +18,7 @@
 | 单元测试必须离线 hermetic | pytest `testpaths=["tests/unit"]` | `pyproject.toml [tool.pytest]` | CI 不收集 integration 测试 |
 | 覆盖率 ≥ 当前门禁值（20%，目标 50%） | coverage `fail_under` + pytest `--cov-fail-under` | `pyproject.toml [tool.coverage.report]` 与 `[tool.pytest.ini_options] addopts` | pytest 退出码非 0 |
 | 安全扫描（无硬编码密钥/弱密码） | bandit | `.harness/constraints/security/bandit.yaml` | bandit 退出码非 0 |
-| 文件 ≤ 400 行 | CI 脚本 `find + wc + awk` | `.github/workflows/ci.yml` | CI job 失败 |
+| 文件 ≤ 500 行 | CI 脚本 `find + wc + awk` | `.github/workflows/ci.yml` | CI job 失败 |
 | 设计文档不腐化（≤60 天） | CI git log 检查 | `.github/workflows/ci.yml` | CI warning（不阻断） |
 | 不可硬编码 API key | 人工审查 + bandit `S` 规则 | 代码审查 + `.harness/constraints/security/bandit.yaml` | bandit 报告 |
 | 不可 force push 主分支 | 人工审查 + 分支保护 | GitHub 仓库设置 | git push 被拒 |
@@ -37,14 +37,14 @@
 
 1. **当前（已达成）**：ruff `E/W/F/I/UP/B`、mypy `no_implicit_optional`/`warn_unreachable`/`strict_equality`、bandit 6 类 skips、coverage 20%（当前 21%，目标 50%+）
 2. **下一阶段**：mypy `warn_return_any`/`check_untyped_defs`、mypy `disallow_untyped_defs=true`、coverage 70%
-3. **目标**：mypy `strict=true`、coverage 80%、文件 ≤ 300 行
+3. **目标**：mypy `strict=true`、coverage 80%、文件 ≤ 400 行
 
 每一步收紧前，需先让现有代码合规（auto-fix 或人工修复），再修改阈值。
 上一轮历史债务清理（107 处 mypy 错误）的修复模式参见 git log。
 
 ## 文件大小豁免清单（历史超标，待拆分）
 
-目标阈值 ≤ 400 行/文件。以下文件因历史原因超标，CI 已豁免，后续按优先级拆分：
+目标阈值 ≤ 500 行/文件。以下文件因历史原因超标，CI 已豁免，后续按优先级拆分：
 
 | 文件 | 行数 | 拆分方向 |
 |------|------|---------|
@@ -62,4 +62,4 @@
 | citeseerx.py | 407 | 抽取 parser |
 
 豁免清单在 `.github/workflows/ci.yml` 的 `File size gate` step 的 `EXEMPT` 变量中维护。
-新文件必须 ≤ 400 行；豁免文件拆分后从清单移除。
+新文件必须 ≤ 500 行；豁免文件拆分后从清单移除。

@@ -145,7 +145,6 @@ class OpenAlexSearcher(PaperSource):
                         source="openalex",
                         categories=concepts[:5],  # Keep top 5 concepts to reduce size
                         doi=doi,
-                        citations=item.get("cited_by_count", 0),
                     )
                 )
 
@@ -183,7 +182,6 @@ if __name__ == "__main__":
         print(f"   DOI: {paper.doi}")
         print(f"   URL: {paper.url}")
         print(f"   OA PDF: {paper.pdf_url}")
-        print(f"   Citations: {paper.citations}")
         print(f"   Authors: {', '.join(paper.authors[:3])}")
         if paper.abstract:
             print(f"   Abstract: {paper.abstract[:100]}...")

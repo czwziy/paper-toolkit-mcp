@@ -132,7 +132,7 @@ testpaths = ["tests/unit"]
 # coverage 门禁内化为 pytest 默认行为：任何 pytest 调用（本地 + CI）都自动
 # 启用覆盖率收集与 fail-under 检查，避免门禁形同虚设（harness 4.6 双重保障）。
 # 阈值与 [tool.coverage.report] fail_under 保持一致，单一真相源。
-addopts = "-q --strict-markers --cov=paper_toolkit_mcp --cov-report=term-missing --cov-fail-under=20"
+addopts = "-q --strict-markers --cov=paper_toolkit_mcp --cov-report=term-missing --cov-fail-under=25"
 markers = [
     "integration: tests requiring network access; NOT run in CI default",
 ]
@@ -143,9 +143,9 @@ omit = ["tests/*", "*/__init__.py", "*/__main__.py"]
 branch = true
 
 [tool.coverage.report]
-# 当前 21%（历史测试债务）；50% 为目标，渐进提升
+# 当前 26%（补齐 storage/server helpers 测试后）；50% 为目标，渐进提升
 # 渐进收紧计划见 .harness/constraints/contracts.md
-fail_under = 20
+fail_under = 25
 show_missing = true
 skip_covered = false
 exclude_lines = [

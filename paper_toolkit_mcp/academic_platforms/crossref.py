@@ -126,10 +126,6 @@ class CrossRefSearcher(PaperSource):
             else:
                 keywords = []
 
-            citations = item.get('is-referenced-by-count')
-            if not isinstance(citations, int):
-                citations = 0
-
             return Paper(
                 paper_id=doi,
                 title=title,
@@ -142,7 +138,6 @@ class CrossRefSearcher(PaperSource):
                 source='crossref',
                 categories=categories,
                 keywords=keywords,
-                citations=citations,
                 extra={
                     'publisher': publisher,
                     'container_title': container_title,
@@ -315,7 +310,6 @@ if __name__ == "__main__":
             print(f"{i}. {paper.title} (DOI: {paper.doi})")
             print(f"   Authors: {', '.join(paper.authors[:3])}{'...' if len(paper.authors) > 3 else ''}")
             print(f"   Published: {paper.published_date.year if paper.published_date else 'N/A'}")
-            print(f"   Citations: {paper.citations}")
             publisher = paper.extra.get('publisher', 'N/A') if paper.extra else 'N/A'
             print(f"   Publisher: {publisher}")
             print()

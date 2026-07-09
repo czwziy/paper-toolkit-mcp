@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import os
 import sys
 from typing import Any
@@ -20,6 +21,8 @@ from .academic_platforms.pubmed import PubMedSearcher
 from .academic_platforms.semantic import SemanticSearcher
 from .config import get_env, get_work_dir
 from .storage import PaperStorage, _paper_dedup_key
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Searcher registry
@@ -115,7 +118,7 @@ def _filter_by_year(
 
 def _simplify_for_ai(paper: dict[str, Any]) -> dict[str, Any]:
     date_str = (paper.get("published_date") or "").strip()
-    year = ""
+    year: int | str = ""
     if date_str:
         try:
             year = int(date_str[:4])
@@ -130,49 +133,109 @@ def _simplify_for_ai(paper: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _merge_json_list(old_json: str, new_json: str) -> str:
+    """Merge two JSON-encoded lists, deduplicating while preserving order."""
+    try:
+        old_list = json.loads(old_json) if old_json else []
+    except (json.JSONDecodeError, TypeError):
+        old_list = []
+    try:
+        new_list = json.loads(new_json) if new_json else []
+    except (json.JSONDecodeError, TypeError):
+        new_list = []
+    if not isinstance(old_list, list):
+        old_list = []
+    if not isinstance(new_list, list):
+        new_list = []
+    combined = list(dict.fromkeys(old_list + new_list))
+    return json.dumps(combined, ensure_ascii=False)
+
+
+def _merge_json_dict(old_json: str, new_json: str) -> str:
+    """Merge two JSON-encoded dicts (new overrides old for same keys)."""
+    try:
+        old_dict = json.loads(old_json) if old_json else {}
+    except (json.JSONDecodeError, TypeError):
+        old_dict = {}
+    try:
+        new_dict = json.loads(new_json) if new_json else {}
+    except (json.JSONDecodeError, TypeError):
+        new_dict = {}
+    if not isinstance(old_dict, dict):
+        old_dict = {}
+    if not isinstance(new_dict, dict):
+        new_dict = {}
+    merged = {**old_dict, **new_dict}
+    return json.dumps(merged, ensure_ascii=False)
+
+
+# Fields stored as JSON arrays (authors/categories/keywords/references)
+_JSON_LIST_FIELDS = ("authors", "categories", "keywords", "references")
+# Fields stored as JSON objects (extra)
+_JSON_DICT_FIELDS = ("extra",)
+# Plain string fields merged with "first non-empty wins" semantics
+_STRING_MERGE_FIELDS = (
+    "doi", "paper_id", "title", "abstract", "published_date",
+    "pdf_url", "url", "updated_date",
+)
+
+
+def _merge_papers(existing: dict[str, Any], new: dict[str, Any]) -> None:
+    """Merge ``new`` into ``existing`` in place, combining complementary fields."""
+    for field in _JSON_LIST_FIELDS:
+        new_val = new.get(field)
+        if not new_val or new_val in ("[]", '""'):
+            continue
+        old_val = existing.get(field)
+        if not old_val or old_val == "[]":
+            existing[field] = new_val
+        else:
+            existing[field] = _merge_json_list(old_val, new_val)
+
+    for field in _JSON_DICT_FIELDS:
+        new_val = new.get(field)
+        if not new_val or new_val == "{}":
+            continue
+        old_val = existing.get(field)
+        if not old_val or old_val == "{}":
+            existing[field] = new_val
+        else:
+            existing[field] = _merge_json_dict(old_val, new_val)
+
+    for field in _STRING_MERGE_FIELDS:
+        new_val = new.get(field)
+        if not new_val:
+            continue
+        old_val = existing.get(field)
+        if not old_val:
+            existing[field] = new_val
+
+    new_src = (new.get("source") or "").strip()
+    if new_src:
+        existing_sources = {s.strip() for s in (existing.get("source") or "").split(",") if s.strip()}
+        if new_src not in existing_sources:
+            existing_sources.add(new_src)
+            existing["source"] = ",".join(sorted(existing_sources))
+
+
 def _dedupe(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Merge duplicate papers, discard those without abstract, upsert to storage."""
     merged: dict[str, dict[str, Any]] = {}
-
-    _merge_fields = (
-        "doi", "paper_id", "title", "authors", "abstract", "published_date",
-        "pdf_url", "url", "updated_date", "categories", "keywords",
-        "references", "extra",
-    )
 
     for paper in papers:
         key = _paper_dedup_key(paper)
         if key not in merged:
             merged[key] = dict(paper)
             continue
-
-        existing = merged[key]
-        for field in _merge_fields:
-            new_val = paper.get(field)
-            if not new_val:
-                continue
-            old_val = existing.get(field)
-            if not old_val:
-                existing[field] = new_val
-            elif isinstance(new_val, list) and isinstance(old_val, list):
-                combined = list(dict.fromkeys(old_val + new_val))
-                existing[field] = combined
-
-        if paper.get("source") and paper["source"] not in (existing.get("source") or ""):
-            existing["source"] = f"{existing.get('source', '')},{paper['source']}".strip(",")
-
-        if paper.get("citations", 0) > existing.get("citations", 0):
-            existing["citations"] = paper["citations"]
+        _merge_papers(merged[key], paper)
 
     deduped = list(merged.values())
-
-    # Discard papers without abstract
     deduped = [p for p in deduped if (p.get("abstract") or "").strip()]
 
     try:
         storage.upsert_papers(deduped)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to upsert papers into storage: %s", exc)
 
     return deduped
 

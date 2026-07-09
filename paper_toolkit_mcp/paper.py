@@ -1,4 +1,15 @@
 # paper_toolkit_mcp/paper.py
+"""Standardized paper dataclass.
+
+List and dict fields (authors, categories, keywords, references, extra) are
+serialized to JSON strings by ``to_dict()`` so they can be stored in SQLite
+TEXT columns and round-tripped losslessly. Storage/merge logic parses these
+JSON strings back to native types, merges, and re-serializes — see
+``server._dedupe_papers`` and ``cli._dedupe``.
+"""
+from __future__ import annotations
+
+import json
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -9,7 +20,7 @@ class Paper:
     # 核心字段（必填，但允许空值或默认值）
     paper_id: str              # Unique identifier (e.g., arXiv ID, PMID, DOI)
     title: str                 # Paper title
-    authors: list[str]         # List of author names
+    authors: list[str]         # List of author full-name strings
     abstract: str              # Abstract text
     doi: str                   # Digital Object Identifier
     published_date: datetime | None   # Publication date
@@ -21,7 +32,6 @@ class Paper:
     updated_date: datetime | None = None        # Last updated date
     categories: list[str] | None = None         # Subject categories
     keywords: list[str] | None = None           # Keywords
-    citations: int = 0                             # Citation count
     references: list[str] | None = None         # List of reference IDs/DOIs
     extra: dict | None = None                   # Source-specific extra metadata
 
@@ -39,11 +49,17 @@ class Paper:
             self.extra = {}
 
     def to_dict(self) -> dict:
-        """Convert paper to dictionary format for serialization"""
+        """Convert paper to dictionary format for serialization.
+
+        List and dict fields are JSON-serialized so they can be stored in
+        SQLite TEXT columns and parsed back losslessly by the storage layer.
+        Single-value fields (title, abstract, doi, dates, urls) stay as
+        plain strings.
+        """
         return {
             'paper_id': self.paper_id,
             'title': self.title,
-            'authors': '; '.join(self.authors) if self.authors else '',
+            'authors': json.dumps(self.authors, ensure_ascii=False) if self.authors else '[]',
             'abstract': self.abstract,
             'doi': self.doi,
             'published_date': self.published_date.isoformat() if self.published_date else '',
@@ -51,9 +67,8 @@ class Paper:
             'url': self.url,
             'source': self.source,
             'updated_date': self.updated_date.isoformat() if self.updated_date else '',
-            'categories': '; '.join(self.categories) if self.categories else '',
-            'keywords': '; '.join(self.keywords) if self.keywords else '',
-            'citations': self.citations,
-            'references': '; '.join(self.references) if self.references else '',
-            'extra': str(self.extra) if self.extra else ''
+            'categories': json.dumps(self.categories, ensure_ascii=False) if self.categories else '[]',
+            'keywords': json.dumps(self.keywords, ensure_ascii=False) if self.keywords else '[]',
+            'references': json.dumps(self.references, ensure_ascii=False) if self.references else '[]',
+            'extra': json.dumps(self.extra, ensure_ascii=False) if self.extra else '{}',
         }
