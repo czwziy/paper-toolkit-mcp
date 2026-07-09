@@ -1,3 +1,5 @@
+**English** | [中文](README_zh.md)
+
 ﻿# Scholar Toolkit MCP
 
 > **Fork Notice**: This is a fork of [openags/paper-toolkit-mcp](https://github.com/openags/paper-toolkit-mcp),
@@ -77,7 +79,7 @@ After processing, you get:
 ### How It Works
 
 - Search results are cached as JSON files in `.paper_cache/`
-- Cache location is **relative to current working directory**
+- Cache location follows your **WORK_DIR** (defaults to the current working directory)
 - Follows your project folder — copy the folder, cache moves with it
 - TTL (time-to-live) is 24 hours by default
 
@@ -185,7 +187,7 @@ Supported citation styles: GB/T 7714-2015, APA 7th, IEEE, Vancouver, Harvard
 
 ### Search Caching
 
-Search results are automatically cached in `.paper_cache/` (relative to current working directory):
+Search results are automatically cached in `.paper_cache/` (under your WORK_DIR, defaults to CWD):
 - **Follows your workspace**: Cache is saved in the folder you're working in
 - **Portable**: Copy your project folder and cache moves with it
 - **Easy management**: Users can manually delete `.paper_cache/` to clear
@@ -498,11 +500,22 @@ We welcome contributions! Here's how to get started:
 4. **Submit a Pull Request**:
    Push changes and create a PR on GitHub.
 
+### Testing
+
+```bash
+# Hermetic unit tests (run in CI, no network) — includes coverage gate (≥20%)
+pytest
+
+# Real-fetch integration tests (local only, requires network)
+# Verifies each source actually retrieves abstracts and full text.
+pytest tests/integration/test_live_fetch.py -m integration --no-cov
+```
+
 ---
 
 ## Demo
 
-<img src="docs\images\demo.png" alt="Demo" width="800">
+<img src="docs/images/demo.png" alt="Demo" width="800">
 
 ## TODO
 
@@ -560,7 +573,7 @@ We welcome contributions! Here's how to get started:
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=openags/paper-toolkit-mcp&type=Date)](https://star-history.com/#openags/paper-toolkit-mcp&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=czwziy/paper-toolkit-mcp&type=Date)](https://star-history.com/#czwziy/paper-toolkit-mcp&Date)
 
 ---
 
