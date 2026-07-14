@@ -169,7 +169,7 @@ name = "Backend layer architecture（依赖方向单向，禁止反向依赖）"
 type = "layers"
 # 同层多模块用 `|` 分隔（独立：互不依赖）；详见 importlinter/contracts/layers.py
 layers = [
-    "paper_toolkit_mcp.server | paper_toolkit_mcp.cli",
+    "paper_toolkit_mcp.server",
     "paper_toolkit_mcp.tools",
     "paper_toolkit_mcp._helpers",
     "paper_toolkit_mcp.academic_platforms",

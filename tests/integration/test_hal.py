@@ -1,7 +1,6 @@
 import unittest
 
 import requests
-
 from paper_toolkit_mcp.academic_platforms.hal import HALSearcher
 
 

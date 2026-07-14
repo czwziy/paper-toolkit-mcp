@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from typing import Any
 
 
 def register(mcp) -> None:
@@ -52,8 +51,6 @@ def register(mcp) -> None:
             return json.dumps({
                 "error": f"Project directory not found: {project_dir}",
             }, indent=2)
-
-        actions: list[dict] = []
 
         # --- Handle CLAUDE.md in project root ---
         claude_src = os.path.join(templates_dir, "CLAUDE.md")

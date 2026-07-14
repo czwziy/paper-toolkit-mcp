@@ -2,7 +2,6 @@ import os
 import unittest
 
 import requests
-
 from paper_toolkit_mcp.academic_platforms.iacr import IACRSearcher
 
 
