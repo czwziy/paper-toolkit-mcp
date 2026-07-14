@@ -10,7 +10,7 @@ class TestUnpaywallResolver(unittest.TestCase):
     """Tests for the retained UnpaywallResolver (fallback download chain).
 
     The ``search_unpaywall`` MCP tool was removed during tool-count reduction,
-    but ``server.unpaywall_resolver`` is still used by ``download_with_fallback``
+    but ``server.unpaywall_resolver`` is still used by ``download_paper``
     to resolve open-access PDF URLs.
     """
 

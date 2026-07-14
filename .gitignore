@@ -181,3 +181,8 @@ test_downloads/
 
 # Paper search cache (follows working directory)
 .paper_cache/
+.ruff_cache/
+.trae/
+docs/
+papers.db-shm
+papers.db-wal
