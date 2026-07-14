@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────
+# 文稿质量规格（manuscript-spec.yaml）
+# ─────────────────────────────────────────────────────
+# AI 初始化时询问用户以下可变标准，然后修改此文件。
+# 固定标准一般不需要修改。
+
+manuscript:
+  file: "manuscript.md"           # 主文稿文件路径
+
+# ── 可变标准（AI 应询问用户后填写） ──
+
+word_count:
+  total_min: 3000                 # [ASK] 总字数下限
+  total_max: 8000                 # [ASK] 总字数上限
+  paragraph_min: 30               # [ASK] 正文段落最少字数
+  paragraph_max: 300              # [ASK] 正文段落最多字数
+
+citations:
+  max_per_sentence: 3             # [ASK] 单句最多引用文献数
+  max_per_document: 5             # [ASK] 同一文献在全文最多引用次数
+  min_total: 30                   # [ASK] 参考文献最少数量
+  max_total: 45                   # [ASK] 参考文献最多数量
+  prefer_recent_years: 5          # [ASK] 优先引用近 N 年文献
+
+structure:
+  # [ASK] 论文类型：original / review / case_report
+  paper_type: "original"
+  # [ASK] 目标期刊名称
+  journal: ""
+  # [ASK] 引用格式：cite_key（推荐，格式为[@cite_key]，cite_key 由 paper-toolkit 自动生成）
+  citation_style: "cite_key"
+  # [ASK] 标题最大字数
+  heading_max_length: 15
+  # [ASK] 标题层级上限
+  heading_max_depth: 4
+
+# ── 固定标准（一般不需要修改） ──
+
+style:
+  # 验证脚本路径（相对于 .harness/ 目录）
+  verify_script: "verify.py"

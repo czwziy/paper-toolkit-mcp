@@ -618,6 +618,8 @@ async def cmd_library(args: argparse.Namespace) -> int:
 
 # Packaged templates directory (shipped with the package as data files).
 _TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "writing_templates")
+
+_HARNESS_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "harness_templates")
 # User-visible target directory (under WORK_DIR).
 _TEMPLATES_TARGET = os.path.join(get_work_dir(), ".paper_toolkit", "writing_templates")
 
@@ -679,6 +681,61 @@ def cmd_init_templates(args: argparse.Namespace) -> int:
         "status": "completed",
         "installed": installed_list,
         "target_dir": _TEMPLATES_TARGET,
+    }, indent=2, ensure_ascii=False))
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# harness init
+# ---------------------------------------------------------------------------
+
+def _copy_tree(src: str, dst: str, *, force: bool = False) -> list[dict]:
+    """Recursively copy *src* into *dst*, returning a manifest of actions."""
+    actions: list[dict] = []
+    for root, _dirs, files in os.walk(src):
+        rel = os.path.relpath(root, src)
+        target_dir = os.path.join(dst, rel) if rel != "." else dst
+        for fname in files:
+            src_file = os.path.join(root, fname)
+            dst_file = os.path.join(target_dir, fname)
+            if os.path.exists(dst_file) and not force:
+                actions.append({"file": os.path.relpath(dst_file, dst), "status": "skipped"})
+                continue
+            os.makedirs(target_dir, exist_ok=True)
+            shutil.copy2(src_file, dst_file)
+            actions.append({"file": os.path.relpath(dst_file, dst), "status": "created"})
+    return actions
+
+
+def cmd_harness_init(args: argparse.Namespace) -> int:
+    """Initialize .harness/ directory in the current project."""
+    if not os.path.isdir(_HARNESS_TEMPLATES_DIR):
+        print(json.dumps({"error": "Harness templates not found in package"}, indent=2))
+        return 1
+
+    target = os.path.join(os.getcwd(), ".harness")
+    if os.path.isdir(target) and not args.force:
+        existing = []
+        for root, _dirs, files in os.walk(target):
+            for f in files:
+                existing.append(os.path.relpath(os.path.join(root, f), target))
+        print(json.dumps({
+            "status": "already_exists",
+            "target_dir": target,
+            "existing_files": existing,
+            "hint": "Use --force to overwrite",
+        }, indent=2, ensure_ascii=False))
+        return 0
+
+    actions = _copy_tree(_HARNESS_TEMPLATES_DIR, target, force=args.force)
+    print(json.dumps({
+        "status": "initialized",
+        "target_dir": target,
+        "files": actions,
+        "next_steps": [
+            "Review and edit .harness/specs/manuscript-spec.yaml for your paper",
+            "Run: python .harness/verify.py <your_manuscript.md>",
+        ],
     }, indent=2, ensure_ascii=False))
     return 0
 
@@ -774,6 +831,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--all", action="store_true", help="Install all available templates")
     p_init.add_argument("--force", action="store_true", help="Overwrite existing files")
 
+    # harness: academic manuscript harness management
+    p_harness = sub.add_parser("harness", help="Academic manuscript harness management")
+    harness_sub = p_harness.add_subparsers(dest="harness_command")
+    p_harness_init = harness_sub.add_parser("init", help="Initialize .harness/ in current project")
+    p_harness_init.add_argument("--force", action="store_true", help="Overwrite existing files")
+
     return parser
 
 
@@ -794,6 +857,12 @@ def main() -> None:
     if args.command == "init-templates":
         # Synchronous command — no asyncio needed (just file copy)
         exit_code = cmd_init_templates(args)
+    elif args.command == "harness":
+        if args.harness_command == "init":
+            exit_code = cmd_harness_init(args)
+        else:
+            parser.parse_args(["harness", "--help"])
+            exit_code = 0
     elif args.command == "cache":
         if args.cache_command == "list":
             exit_code = asyncio.run(cmd_cache_list(args))
