@@ -79,7 +79,7 @@ packages = ["paper_toolkit_mcp"]
 [tool.ruff]
 line-length = 120
 target-version = "py310"
-extend-exclude = ["paper_cache", "build", "dist", "csl"]
+extend-exclude = ["paper_cache", "build", "dist", "csl", "harness_templates"]
 
 [tool.ruff.lint]
 select = [
@@ -114,6 +114,8 @@ warn_unused_configs = true
 no_implicit_optional = true
 warn_unreachable = true
 strict_equality = true
+# 排除模板文件（复制到用户项目后独立运行，不参与包类型检查）
+exclude = ["harness_templates/"]
 # 渐进收紧计划见 .harness/constraints/contracts.md
 # 下一阶段将启用：disallow_untyped_defs / strict（待全部函数补全注解）
 

@@ -186,3 +186,5 @@ test_downloads/
 docs/
 papers.db-shm
 papers.db-wal
+.import_linter_cache/ 
+research/
