@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import sys
 from typing import Any
 
@@ -612,6 +613,77 @@ async def cmd_library(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Writing templates
+# ---------------------------------------------------------------------------
+
+# Packaged templates directory (shipped with the package as data files).
+_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "writing_templates")
+# User-visible target directory (under WORK_DIR).
+_TEMPLATES_TARGET = os.path.join(get_work_dir(), ".paper_toolkit", "writing_templates")
+
+
+def _list_available_templates() -> list[str]:
+    """Scan the packaged templates directory for .md files."""
+    if not os.path.isdir(_TEMPLATES_DIR):
+        return []
+    return sorted(
+        f[:-3] for f in os.listdir(_TEMPLATES_DIR) if f.endswith(".md")
+    )
+
+
+def cmd_init_templates(args: argparse.Namespace) -> int:
+    """Initialize writing templates into the working directory.
+
+    Without --type: list available templates.
+    With --type <name>: copy the template to .paper_toolkit/writing_templates/.
+    With --all: copy all templates.
+    --force: overwrite existing files.
+    """
+    available = _list_available_templates()
+    if not available:
+        print(json.dumps({"error": "No templates found in package"}, indent=2))
+        return 1
+
+    if not args.template_type and not args.all:
+        # List mode
+        installed = []
+        if os.path.isdir(_TEMPLATES_TARGET):
+            installed = [
+                f[:-3] for f in os.listdir(_TEMPLATES_TARGET) if f.endswith(".md")
+            ]
+        print(json.dumps({
+            "available": available,
+            "installed": installed,
+            "target_dir": _TEMPLATES_TARGET,
+        }, indent=2, ensure_ascii=False))
+        return 0
+
+    to_install = available if args.all else [args.template_type]
+    for tpl in to_install:
+        if tpl not in available:
+            print(json.dumps({"error": f"Unknown template: {tpl}", "available": available}, indent=2))
+            return 1
+
+    os.makedirs(_TEMPLATES_TARGET, exist_ok=True)
+    installed_list = []
+    for tpl in to_install:
+        src = os.path.join(_TEMPLATES_DIR, f"{tpl}.md")
+        dst = os.path.join(_TEMPLATES_TARGET, f"{tpl}.md")
+        if os.path.exists(dst) and not args.force:
+            installed_list.append({"template": tpl, "status": "skipped", "reason": "already exists (use --force)"})
+            continue
+        shutil.copy2(src, dst)
+        installed_list.append({"template": tpl, "status": "installed", "path": dst})
+
+    print(json.dumps({
+        "status": "completed",
+        "installed": installed_list,
+        "target_dir": _TEMPLATES_TARGET,
+    }, indent=2, ensure_ascii=False))
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 
@@ -695,6 +767,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_lib_list.add_argument("-s", "--source", default="", help="Filter by source")
     p_lib_list.add_argument("-n", "--limit", type=int, default=100, help="Max results")
 
+    # init-templates: install writing templates to working directory
+    p_init = sub.add_parser("init-templates", help="Install writing templates to working directory")
+    p_init.add_argument("-t", "--type", dest="template_type", default="",
+                        help="Template name (e.g. nursing_chinese_review). Without this, lists available.")
+    p_init.add_argument("--all", action="store_true", help="Install all available templates")
+    p_init.add_argument("--force", action="store_true", help="Overwrite existing files")
+
     return parser
 
 
@@ -712,7 +791,10 @@ def main() -> None:
         "manuscript": cmd_manuscript,
     }
 
-    if args.command == "cache":
+    if args.command == "init-templates":
+        # Synchronous command — no asyncio needed (just file copy)
+        exit_code = cmd_init_templates(args)
+    elif args.command == "cache":
         if args.cache_command == "list":
             exit_code = asyncio.run(cmd_cache_list(args))
         elif args.cache_command == "clear":
