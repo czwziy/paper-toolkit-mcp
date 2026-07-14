@@ -67,7 +67,6 @@ Issues = "https://github.com/czwziy/paper-toolkit-mcp/issues"
 
 [project.scripts]
 paper-toolkit-mcp = "paper_toolkit_mcp.server:main"
-paper-toolkit = "paper_toolkit_mcp.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["paper_toolkit_mcp"]

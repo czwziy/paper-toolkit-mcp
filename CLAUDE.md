@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-paper-toolkit-mcp 是一个 MCP 工具包，用于学术论文搜索、手稿处理与引用生成。技术栈：Python 3.10+ / FastMCP / requests / pypdf / Pandoc。PyPI 包名 `paper-toolkit-mcp`，提供 `paper-toolkit-mcp`（MCP server）与 `paper-toolkit`（CLI）两个入口。
+paper-toolkit-mcp 是一个 MCP 工具包，用于学术论文搜索、手稿处理与引用生成。技术栈：Python 3.10+ / FastMCP / requests / pypdf / Pandoc。PyPI 包名 `paper-toolkit-mcp`，提供 `paper-toolkit-mcp`（MCP server）入口。
 
 ## 知识导航
 
@@ -59,7 +59,7 @@ ruff check paper_toolkit_mcp tests \
 > 以下规则由约束层代码机械化执行，违反即 CI 红。
 
 - **禁止硬编码 API key**。所有密钥通过 `config.get_env(name)` 读取，配置走 `.env` 文件（gitignored）。参见 [`.env.example`](.env.example)。
-- **禁止 `academic_platforms/*` 反向 import `server` 或 `cli`**。分层依赖方向单向，由 `lint-imports` 强制。
+- **禁止 `academic_platforms/*` 反向 import `server` 或 `tools`**。分层依赖方向单向，由 `lint-imports` 强制。
 - **禁止新增不继承 `PaperSource` 的搜索器**。所有学术源必须实现 `academic_platforms/base.py` 的 `PaperSource` 抽象基类。
 - **禁止在 `paper.py`（数据类）中 import 任何上层模块**。`Paper` 是最底层依赖。
 - **禁止提交真实 API key / `.env` / `paper_cache/` / `downloads/`**。`.gitignore` 已覆盖。
@@ -70,7 +70,7 @@ ruff check paper_toolkit_mcp tests \
 
 ## 棕地陷阱（不要复制旧模式）
 
-- `server.py` 与 `cli.py` 集中实例化所有 searcher — 新增 searcher 时**两处都要注册**，否则 MCP 工具与 CLI 命令会不一致。
+- `server.py` 集中实例化所有 searcher — 新增 searcher 时需要在 `server.py` 中注册。
 - 原 `tests/test.pubmed.py` 已重命名为 `tests/integration/test_pubmed.py` — pytest 不自动发现点号命名的文件，新增测试文件必须用 `test_*.py` 命名。
 - 原 `tests/test_server.py` 已拆分：离线部分在 `tests/unit/test_server_sources.py`，网络部分在 `tests/integration/test_server.py`。
 - `tests/integration/*` 中多个测试在 `setUpClass` 调用真实 API 探测可达性（如 `check_semantic_accessible`）——这类**不能放 `tests/unit/`**，否则 CI 在 import 阶段就触网。
