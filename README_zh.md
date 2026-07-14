@@ -44,11 +44,16 @@ pip install paper-toolkit-mcp
 {
   "mcpServers": {
     "paper-toolkit-mcp": {
-      "command": "paper-toolkit-mcp"
+      "command": "paper-toolkit-mcp",
+      "env": {
+        "paper_toolkit_mcp_WORK_DIR": "/path/to/your/project"
+      }
     }
   }
 }
 ```
+
+> **注意**：设置 `paper_toolkit_mcp_WORK_DIR` 为你的项目目录，这样 `papers.db`、下载文件和缓存都会存储在该项目目录下。
 
 ### API Key（可选）
 

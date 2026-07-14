@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "paper-toolkit-mcp"
-version = "0.2.0"
+version = "0.3.0"
 authors = [{ name = "YNLO", email = "czwziy@ynlo.top" }]
 description = "A MCP toolkit for paper searching, manuscript processing, and academic research workflows."
 readme = "README.md"

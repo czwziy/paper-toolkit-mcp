@@ -44,11 +44,16 @@ Add to your MCP client config:
 {
   "mcpServers": {
     "paper-toolkit-mcp": {
-      "command": "paper-toolkit-mcp"
+      "command": "paper-toolkit-mcp",
+      "env": {
+        "paper_toolkit_mcp_WORK_DIR": "/path/to/your/project"
+      }
     }
   }
 }
 ```
+
+> **Note**: Set `paper_toolkit_mcp_WORK_DIR` to your project directory so that `papers.db`, downloads, and cache are stored there.
 
 ### API Keys (Optional)
 
