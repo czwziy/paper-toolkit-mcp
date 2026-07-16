@@ -14,12 +14,14 @@ word_count:
   total_max: 8000                 # [ASK] 总字数上限
   paragraph_min: 30               # [ASK] 正文段落最少字数
   paragraph_max: 300              # [ASK] 正文段落最多字数
+  abstract_min: 200               # [ASK] 摘要最少字数（定稿阶段生效）
+  abstract_max: 500               # [ASK] 摘要最多字数（定稿阶段生效）
 
 citations:
   max_per_sentence: 3             # [ASK] 单句最多引用文献数
   max_per_document: 5             # [ASK] 同一文献在全文最多引用次数
-  min_total: 30                   # [ASK] 参考文献最少数量
-  max_total: 45                   # [ASK] 参考文献最多数量
+  min_total: 30                   # [ASK] 参考文献最少数量（定稿阶段生效）
+  max_total: 45                   # [ASK] 参考文献最多数量（定稿阶段生效）
   prefer_recent_years: 5          # [ASK] 优先引用近 N 年文献
 
 structure:
@@ -33,6 +35,98 @@ structure:
   heading_max_length: 15
   # [ASK] 标题层级上限
   heading_max_depth: 4
+
+language:
+  # [ASK] 禁用的夸大词汇列表（可根据学科/期刊调整）
+  # 来源：综合 GPTZero / Kobak et al. 2024 / 186K+ 文章分析等研究
+  # 分类：A=夸大断言 B=AI高频虚词 C=过度修饰 D=伪学术腔
+  boast_words:
+    # ── A. 夸大断言（无证据的绝对化表述） ──
+    - "首次证实"
+    - "颠覆性"
+    - "革命性"
+    - "绝无仅有"
+    - "前所未有"
+    - "极其创新"
+    - "突破性"
+    - "独创"
+    - "首创"
+    - "完美解决"
+    - "彻底解决"
+    - "完全解决"
+    - "根本性突破"
+    - "史无前例"
+    - "划时代"
+    - "里程碑式"
+    - "开创性"
+    - "改写"
+    - "重塑"
+    # ── B. AI 高频虚词（LLM 训练语料中过度出现的词） ──
+    - "范式"              # paradigm，AI 对 minor change 也称范式转变
+    - "范式转变"
+    - "范式转换"
+    - "协同"              # synergy，空泛的企业套话
+    - "赋能"              # empower，AI 滥用的动词
+    - "解锁"              # unlock，AI 偏好的隐喻
+    - "释放"              # unleash，同上
+    - "催化"              # catalyze，过度使用的隐喻
+    - "驾驭"              # harness，AI 偏好的机械隐喻
+    - "深耕"              # delve 的中文对应，AI 高频词
+    - "织就"              # tapestry 的中文对应
+    - "画卷"              # 同上
+    - "景观"              # landscape 的隐喻用法
+    - "领域"              # realm，AI 偏好的填充词
+    - "基石"              # cornerstone，过度使用的隐喻
+    - "灯塔"              # beacon，AI 偏好的隐喻
+    - "枢纽"              # pivotal 的名词化
+    # ── C. 过度修饰（空泛的形容词/副词） ──
+    - "无缝"              # seamlessly，AI 最爱副词
+    - "稳健"              # robust，空泛的质量声明
+    - "全面"              # comprehensive，常用于填充
+    - "关键"              # crucial，AI 过度使用
+    - "至关重要"
+    - "不可或缺"          # indispensable
+    - "精妙"              # intricate，AI 高频
+    - "细致入微"          # meticulous
+    - "深刻"              # profound，AI 滥用
+    - "显著"              # significant，AI 过度使用（需有统计支撑时除外）
+    - "卓越"              # outstanding
+    - "非凡"              # extraordinary
+    - "无与伦比"          # unparalleled
+    - "引人瞩目"          # noteworthy
+    - "令人瞩目"
+    # ── D. 伪学术腔（AI 偏好的学术八股） ──
+    - "值得注意的是"      # it's worth noting that
+    - "需要指出的是"
+    - "不容忽视"
+    - "毋庸置疑"
+    - "不言而喻"
+    - "众所周知"          # well-known，若真众所周知则无需说
+    - "总而言之"          # in conclusion
+    - "综上所述"          # 同上
+    - "在当今"            # in today's... AI 开头套话
+    - "在当下"
+    - "日新月异"          # ever-evolving
+    - "蓬勃发展"          # vibrant
+    - "方兴未艾"
+  # [ASK] 禁用的回引正则模式（如"见本文1.2节"等）
+  back_reference_patterns:
+    - '见本文\\s*\\d'
+    - '如前文\\s*\\d'
+    - '如上文\\s*\\d'
+    - '本研究\\s*\\d+\\.\\d+'
+    - '前述\\s*\\d'
+    - '同\\s*\\d+\\.\\d+'
+    - '详见\\s*\\d'
+
+# ── 工作模式 ──
+
+mode:
+  # 验证模式，可通过 verify.py --mode 切换，默认跟随此配置。
+  # chapter: 子代理写单章节 — 只跑 local 规则 + 跳过定稿规则
+  # draft:   全文撰写中 — 跑所有规则但跳过定稿规则（R8.3/R5.4）
+  # final:   定稿验证 — 全量检查
+  default: "final"
 
 # ── 固定标准（一般不需要修改） ──
 

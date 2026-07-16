@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from functools import partial
 
 from . import (
     VerifyResult,
@@ -17,8 +16,16 @@ from . import (
 
 # ── R1.1 标题层级编号格式 ──────────────────────────────────
 
-def check_heading_hierarchy(lines: list[str], result: VerifyResult):
-    """R1.1 检查标题层级编号格式。"""
+def check_heading_hierarchy(
+    lines: list[str],
+    result: VerifyResult,
+    *,
+    heading_max_depth: int = 4,
+):
+    """R1.1 检查标题层级编号格式。
+
+    heading_max_depth 通过 spec 配置注入，默认 4。
+    """
     # 先检测Markdown标题偏移量：论文标题用 #，则 ## 对应编号1级
     # 找到第一个编号标题的Markdown层级来确定偏移
     offset = 1  # 默认偏移：# 为论文标题，## 为编号1级
@@ -44,12 +51,12 @@ def check_heading_hierarchy(lines: list[str], result: VerifyResult):
             continue
         parts = number.split(".")
         # 检查层级深度
-        if len(parts) > 4:
+        if len(parts) > heading_max_depth:
             result.add(Violation(
                 rule="R1.1", line=i,
-                message=f"标题层级超过4级：'{text.strip()}'",
+                message=f"标题层级超过{heading_max_depth}级：'{text.strip()}'",
                 severity="error",
-                fix_hint="减少层级深度，不超过4级（如1.1.1.1）"
+                fix_hint=f"减少层级深度，不超过{heading_max_depth}级（如{'1.' * (heading_max_depth - 1)}1）"
             ))
         # 检查编号与Markdown层级是否匹配（考虑偏移）
         expected_md_level = len(parts) + offset
@@ -64,8 +71,16 @@ def check_heading_hierarchy(lines: list[str], result: VerifyResult):
 
 # ── R1.2 标题长度 ─────────────────────────────────────────
 
-def check_heading_length(lines: list[str], result: VerifyResult):
-    """R1.2 检查标题长度不超过15字。"""
+def check_heading_length(
+    lines: list[str],
+    result: VerifyResult,
+    *,
+    heading_max_length: int = 15,
+):
+    """R1.2 检查标题长度。
+
+    heading_max_length 通过 spec 配置注入，默认 15。
+    """
     is_first_heading = True
     for i, line in enumerate(lines, 1):
         parsed = parse_heading(line)
@@ -85,12 +100,12 @@ def check_heading_length(lines: list[str], result: VerifyResult):
             title_text = text.strip()
         # 计算中文字符数（中文算1字，英文单词算1字）
         char_count = len(title_text)
-        if char_count > 15:
+        if char_count > heading_max_length:
             result.add(Violation(
                 rule="R1.2", line=i,
-                message=f"标题超15字（{char_count}字）：'{title_text}'",
+                message=f"标题超{heading_max_length}字（{char_count}字）：'{title_text}'",
                 severity="warning",
-                fix_hint="精简标题，控制在15字以内"
+                fix_hint=f"精简标题，控制在{heading_max_length}字以内"
             ))
         # 检查末尾标点
         if title_text and title_text[-1] in "。！？；：":

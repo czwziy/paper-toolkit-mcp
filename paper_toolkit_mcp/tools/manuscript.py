@@ -1,8 +1,10 @@
 # paper_toolkit_mcp/tools/manuscript.py
 """Manuscript processing, writing templates, and reference export MCP tools."""
 import asyncio
+import json
 import logging
 import os
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -11,6 +13,7 @@ logger = logging.getLogger(__name__)
 # Module-level state — set by register()
 # ---------------------------------------------------------------------------
 _default_cache_dir = ""
+_storage = None  # PaperStorage instance, set by register()
 
 # Packaged templates directory (shipped with the package as data files).
 _PACKAGED_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "..", "writing_templates")
@@ -361,15 +364,316 @@ async def get_writing_template(category: str = "") -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# cite_key based tools — work with papers.db cite_key references
+# ---------------------------------------------------------------------------
+
+_CITE_KEY_RE = re.compile(r"\[@([a-zA-Z0-9]+)\]")
+
+
+def _extract_cite_keys(text: str) -> list[str]:
+    """Extract unique cite_keys from text in order of first appearance.
+
+    Matches patterns like [@Kxq], [@JHw], [@vEw].
+    Returns a list of unique cite_keys in order of first appearance.
+    """
+    seen: set[str] = set()
+    keys: list[str] = []
+    for m in _CITE_KEY_RE.finditer(text):
+        key = m.group(1)
+        if key not in seen:
+            seen.add(key)
+            keys.append(key)
+    return keys
+
+
+def _paper_to_ref_dict(row: dict[str, Any]) -> dict[str, Any]:
+    """Convert a papers.db row dict to a reference.py-compatible dict.
+
+    papers.db stores authors/categories/keywords as JSON strings;
+    reference.py expects authors as list[str] and year as a field.
+    """
+    authors = row.get("authors", "[]")
+    if isinstance(authors, str):
+        try:
+            authors = json.loads(authors)
+        except (json.JSONDecodeError, TypeError):
+            authors = []
+    if not isinstance(authors, list):
+        authors = []
+
+    # Extract year from published_date (format: "YYYY-MM-DD" or "YYYY")
+    year = ""
+    pub_date = row.get("published_date", "")
+    if pub_date:
+        year = pub_date[:4] if len(pub_date) >= 4 else pub_date
+
+    return {
+        "paper_id": row.get("paper_id", ""),
+        "cite_key": row.get("cite_key", ""),
+        "title": row.get("title", ""),
+        "authors": authors,
+        "year": year,
+        "source": row.get("source", ""),
+        "doi": row.get("doi", ""),
+        "url": row.get("url", ""),
+        "abstract": row.get("abstract", ""),
+    }
+
+
+def _format_author_year(paper: dict[str, Any]) -> str:
+    """Format as '第一作者(年份)' for human review copy.
+
+    For Chinese names, use the full first author name.
+    For Western names, use 'Surname'.
+    """
+    authors = paper.get("authors", [])
+    year = paper.get("year", "") or "n.d."
+    if not authors:
+        return f"Unknown({year})"
+
+    first_author = str(authors[0]).strip()
+    # Western name: "Given Family" → "Family"
+    # Chinese name: keep full name
+    parts = first_author.split()
+    if len(parts) >= 2:
+        # Heuristic: if the first part looks like a Western given name
+        # (starts with uppercase, short), use the last part as surname
+        surname = parts[-1]
+    else:
+        surname = first_author
+
+    return f"{surname}({year})"
+
+
+async def generate_ref_list(
+    manuscript_path: str,
+    citation_style: str = "gb7714",
+    output_path: str | None = None,
+) -> dict[str, Any]:
+    """Generate a formatted reference list from a manuscript's cite_key citations.
+
+    Scans the manuscript for [@cite_key] references, looks up each paper
+    in the local papers.db database, and generates a formatted reference
+    list appended to the manuscript or saved to a separate file.
+
+    This tool is designed for the final stage of manuscript preparation,
+    when the manuscript text is finalized and the reference list needs
+    to be generated.
+
+    Args:
+        manuscript_path: Path to the manuscript Markdown file containing
+            [@cite_key] citations (e.g., [@Kxq], [@JHw]).
+        citation_style: Citation style for the reference list.
+            One of "gb7714" (GB/T 7714-2015), "apa" (APA 7th), "ieee" (IEEE).
+            Defaults to "gb7714".
+        output_path: Optional path to save the output. If not provided,
+            saves as "<manuscript_name>_with_refs.md" in the same directory.
+
+    Returns:
+        Dict with status, report, and output file path.
+    """
+    from ..reference import format_citation_gb7714, format_citation_apa, format_citation_ieee
+
+    if _storage is None:
+        return {"error": "Storage not initialized. This tool requires papers.db access."}
+
+    if not os.path.exists(manuscript_path):
+        return {"error": f"File not found: {manuscript_path}"}
+
+    with open(manuscript_path, encoding="utf-8") as f:
+        content = f.read()
+
+    cite_keys = _extract_cite_keys(content)
+    if not cite_keys:
+        return {
+            "status": "no_citations_found",
+            "message": "No [@cite_key] references found in the manuscript.",
+        }
+
+    # Look up each cite_key in papers.db
+    papers: list[dict[str, Any]] = []
+    failed_keys: list[str] = []
+    key_to_index: dict[str, int] = {}
+
+    for key in cite_keys:
+        row = _storage.get_by_cite_key(key)
+        if row is None:
+            failed_keys.append(key)
+            continue
+        paper = _paper_to_ref_dict(row)
+        key_to_index[key] = len(papers) + 1  # 1-based numbering
+        papers.append(paper)
+
+    # Generate reference list
+    formatters = {
+        "gb7714": format_citation_gb7714,
+        "apa": format_citation_apa,
+        "ieee": format_citation_ieee,
+    }
+    formatter = formatters.get(citation_style, format_citation_gb7714)
+
+    ref_lines: list[str] = []
+    for i, paper in enumerate(papers, start=1):
+        citation = formatter(paper)
+        ref_lines.append(f"[{i}] {citation}")
+
+    ref_section = "\n".join(ref_lines)
+
+    # Replace [@cite_key] with [N] in the text
+    processed_text = content
+    for key, idx in key_to_index.items():
+        # Replace all occurrences of [@key] with [idx]
+        processed_text = processed_text.replace(f"[@{key}]", f"[{idx}]")
+
+    # Append reference section
+    processed_text += f"\n\n## 参考文献\n\n{ref_section}"
+
+    # Determine output path
+    if output_path is None:
+        base_dir = os.path.dirname(manuscript_path) or "."
+        base_name = os.path.splitext(os.path.basename(manuscript_path))[0]
+        output_path = os.path.join(base_dir, f"{base_name}_with_refs.md")
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(processed_text)
+
+    report = {
+        "total_cite_keys": len(cite_keys),
+        "resolved": len(papers),
+        "unresolved": len(failed_keys),
+        "citation_style": citation_style,
+    }
+    if failed_keys:
+        report["unresolved_keys"] = failed_keys
+
+    return {
+        "status": "completed",
+        "report": report,
+        "output_file": output_path,
+    }
+
+
+async def generate_human_review(
+    manuscript_path: str,
+    output_path: str | None = None,
+) -> dict[str, Any]:
+    """Generate a human-review copy with cite_keys replaced by searchable identifiers.
+
+    Replaces each [@cite_key] in the manuscript with a human-readable and
+    searchable reference marker in the format:
+        [@第一作者(年份) DOI:10.xxxx/xxx]
+
+    This allows human reviewers to:
+    1. Quickly identify which paper is being cited
+    2. Search for the paper using DOI or author-year combination
+    3. Verify that citations are accurate and correctly attributed
+
+    The original [@cite_key] format is machine-friendly but opaque to humans.
+    This tool creates a parallel version for manual verification.
+
+    Args:
+        manuscript_path: Path to the manuscript Markdown file containing
+            [@cite_key] citations.
+        output_path: Optional path to save the output. If not provided,
+            saves as "<manuscript_name>_human_review.md" in the same directory.
+
+    Returns:
+        Dict with status, report, and output file path.
+    """
+    if _storage is None:
+        return {"error": "Storage not initialized. This tool requires papers.db access."}
+
+    if not os.path.exists(manuscript_path):
+        return {"error": f"File not found: {manuscript_path}"}
+
+    with open(manuscript_path, encoding="utf-8") as f:
+        content = f.read()
+
+    cite_keys = _extract_cite_keys(content)
+    if not cite_keys:
+        return {
+            "status": "no_citations_found",
+            "message": "No [@cite_key] references found in the manuscript.",
+        }
+
+    # Build replacement map
+    replacements: dict[str, str] = {}
+    failed_keys: list[str] = []
+    resolved_info: list[dict[str, str]] = []
+
+    for key in cite_keys:
+        row = _storage.get_by_cite_key(key)
+        if row is None:
+            failed_keys.append(key)
+            replacements[key] = f"[@{key}⚠未找到]"
+            continue
+
+        paper = _paper_to_ref_dict(row)
+        author_year = _format_author_year(paper)
+        doi = paper.get("doi", "")
+
+        if doi:
+            human_marker = f"[@{author_year} DOI:{doi}]"
+        else:
+            # Fallback: use title snippet if no DOI
+            title = paper.get("title", "")
+            title_snippet = title[:30] + "..." if len(title) > 30 else title
+            human_marker = f"[@{author_year} \"{title_snippet}\"]"
+
+        replacements[key] = human_marker
+        resolved_info.append({
+            "cite_key": key,
+            "author_year": author_year,
+            "doi": doi,
+            "title": paper.get("title", ""),
+        })
+
+    # Apply replacements
+    processed_text = content
+    for key, marker in replacements.items():
+        processed_text = processed_text.replace(f"[@{key}]", marker)
+
+    # Determine output path
+    if output_path is None:
+        base_dir = os.path.dirname(manuscript_path) or "."
+        base_name = os.path.splitext(os.path.basename(manuscript_path))[0]
+        output_path = os.path.join(base_dir, f"{base_name}_human_review.md")
+
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(processed_text)
+
+    report = {
+        "total_cite_keys": len(cite_keys),
+        "resolved": len(resolved_info),
+        "unresolved": len(failed_keys),
+    }
+    if failed_keys:
+        report["unresolved_keys"] = failed_keys
+    if resolved_info:
+        report["mapping"] = resolved_info
+
+    return {
+        "status": "completed",
+        "report": report,
+        "output_file": output_path,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
 
-def register(mcp, *, default_cache_dir: str):
+def register(mcp, *, default_cache_dir: str, storage=None):
     """Register manuscript processing tools on the MCP server."""
-    global _default_cache_dir
+    global _default_cache_dir, _storage
     _default_cache_dir = default_cache_dir
+    _storage = storage
 
     mcp.tool()(process_manuscript)
     mcp.tool()(get_paper_metadata)
     mcp.tool()(export_references)
     mcp.tool()(get_writing_template)
+    mcp.tool()(generate_ref_list)
+    mcp.tool()(generate_human_review)

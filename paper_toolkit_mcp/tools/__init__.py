@@ -22,7 +22,7 @@ def register_all(
 
     Called once by server.py after searcher instantiation.
     """
-    from . import download, harness, library, search
+    from . import download, harness, library, manuscript, search
 
     search.register(
         mcp,
@@ -38,6 +38,6 @@ def register_all(
         unpaywall_resolver=unpaywall_resolver,
         default_save_path=default_save_path,
     )
-    # manuscript.register(mcp, default_cache_dir=default_cache_dir)  # 暂不成熟，暂不挂载
+    manuscript.register(mcp, default_cache_dir=default_cache_dir, storage=storage)
     library.register(mcp, storage=storage, default_cache_dir=default_cache_dir)
     harness.register(mcp)

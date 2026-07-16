@@ -197,48 +197,64 @@ def register(mcp) -> None:
         """List all harness rules with their descriptions.
 
         Returns a summary of all verification rules (R0-R9) including
-        rule ID, name, severity, and brief description.
+        rule ID, name, severity, scope, and brief description.
+
+        Scope:
+        - "local": Rules that can be checked on a single chapter/section
+          by a sub-agent independently (e.g., language, format).
+        - "global": Rules that only make sense when checking the full
+          merged manuscript (e.g., total word count, total references).
+
+        Draft mode:
+        - In draft mode (writing phase), rules for abstract word count (R8.3)
+          and total reference count (R5.4) are skipped, since abstracts and
+          reference lists are generated after the manuscript is finalized.
 
         Returns:
             JSON string with list of all rules.
         """
         rules = [
-            {"id": "R0.1", "name": "全文语言中文", "severity": "error", "desc": "全文必须使用中文撰写"},
-            {"id": "R0.2", "name": "标题语言中文", "severity": "error", "desc": "标题必须使用中文"},
-            {"id": "R1.1", "name": "标题层级", "severity": "error", "desc": "采用阿拉伯数字层级法，不超过4级"},
-            {"id": "R1.2", "name": "标题长度", "severity": "warning", "desc": "标题不超过15字"},
-            {"id": "R1.3", "name": "禁止列表", "severity": "error", "desc": "正文中禁止使用列表格式"},
-            {"id": "R1.4", "name": "禁止加粗", "severity": "error", "desc": "正文中禁止使用加粗标记"},
-            {"id": "R2.1", "name": "P值格式", "severity": "error", "desc": "P值须符合规范格式"},
-            {"id": "R2.2", "name": "均值标准差", "severity": "warning", "desc": "均值与标准差小数位一致"},
-            {"id": "R2.3", "name": "推断统计量", "severity": "error", "desc": "t/F/χ²/r等保留2位小数"},
-            {"id": "R2.4", "name": "百分率", "severity": "error", "desc": "百分率格式规范"},
-            {"id": "R2.5", "name": "数据一致性", "severity": "warning", "desc": "摘要、正文、表格数值一致"},
-            {"id": "R3.1", "name": "必备章节", "severity": "error", "desc": "须包含引言、方法、结果、讨论、结论"},
-            {"id": "R4.1", "name": "术语缩写", "severity": "warning", "desc": "术语统一，首次出现时定义缩写"},
-            {"id": "R4.2", "name": "行文谦逊", "severity": "error", "desc": "禁用'首次证实''颠覆性'等词汇"},
-            {"id": "R5.1", "name": "引用格式", "severity": "error", "desc": "使用[@cite_key]格式"},
-            {"id": "R5.2", "name": "待引证标记", "severity": "warning", "desc": "无文献支撑时使用[待引证]"},
-            {"id": "R5.3", "name": "引用密度", "severity": "warning", "desc": "单句引用不超过2篇"},
-            {"id": "R5.4", "name": "文献总量", "severity": "warning", "desc": "全文引用30-45篇文献"},
-            {"id": "R6.1", "name": "引用位置", "severity": "error", "desc": "引用标记紧跟句末标点之前"},
-            {"id": "R6.2", "name": "多文献同引", "severity": "error", "desc": "使用[@id1, id2]格式"},
-            {"id": "R7.1", "name": "标题冒号", "severity": "error", "desc": "标题中不使用冒号"},
-            {"id": "R7.2", "name": "自我夸大", "severity": "error", "desc": "禁用夸大词汇"},
-            {"id": "R7.3", "name": "回引", "severity": "error", "desc": "禁止'见本文X.X节'"},
-            {"id": "R7.4", "name": "用户意见", "severity": "warning", "desc": "处理【】中的用户意见"},
-            {"id": "R8.1", "name": "全文字数", "severity": "warning", "desc": "全文3000-8000字"},
-            {"id": "R8.2", "name": "段落字数", "severity": "warning", "desc": "段落30-500字"},
-            {"id": "R8.3", "name": "摘要字数", "severity": "warning", "desc": "摘要200-500字"},
-            {"id": "R9.1", "name": "表格结构", "severity": "warning", "desc": "三线表，无竖线"},
-            {"id": "R9.2", "name": "表格数据", "severity": "warning", "desc": "数据格式规范"},
-            {"id": "R9.3", "name": "表格一致性", "severity": "warning", "desc": "表格与正文数值一致"},
-            {"id": "R9.4", "name": "图片质量", "severity": "warning", "desc": "分辨率≥300dpi"},
-            {"id": "R9.5", "name": "图片编号", "severity": "warning", "desc": "按顺序编号，先文后图"},
+            {"id": "R0.1", "name": "全文语言中文", "severity": "error", "scope": "local", "desc": "全文必须使用中文撰写"},
+            {"id": "R0.2", "name": "标题语言中文", "severity": "error", "scope": "local", "desc": "标题必须使用中文"},
+            {"id": "R1.1", "name": "标题层级", "severity": "error", "scope": "local", "desc": "采用阿拉伯数字层级法，不超过4级"},
+            {"id": "R1.2", "name": "标题长度", "severity": "warning", "scope": "local", "desc": "标题不超过15字"},
+            {"id": "R1.3", "name": "禁止列表", "severity": "error", "scope": "local", "desc": "正文中禁止使用列表格式"},
+            {"id": "R1.4", "name": "禁止加粗", "severity": "error", "scope": "local", "desc": "正文中禁止使用加粗标记"},
+            {"id": "R2.1", "name": "P值格式", "severity": "error", "scope": "local", "desc": "P值须符合规范格式"},
+            {"id": "R2.2", "name": "均值标准差", "severity": "warning", "scope": "local", "desc": "均值与标准差小数位一致"},
+            {"id": "R2.3", "name": "推断统计量", "severity": "error", "scope": "local", "desc": "t/F/χ²/r等保留2位小数"},
+            {"id": "R2.4", "name": "百分率", "severity": "error", "scope": "local", "desc": "百分率格式规范"},
+            {"id": "R2.5", "name": "数据一致性", "severity": "warning", "scope": "global", "desc": "摘要、正文、表格数值一致"},
+            {"id": "R3.1", "name": "必备章节", "severity": "error", "scope": "global", "desc": "须包含引言、方法、结果、讨论、结论"},
+            {"id": "R4.1", "name": "术语缩写", "severity": "warning", "scope": "local", "desc": "术语统一，首次出现时定义缩写"},
+            {"id": "R4.2", "name": "行文谦逊", "severity": "error", "scope": "local", "desc": "禁用'首次证实''颠覆性'等词汇"},
+            {"id": "R5.1", "name": "引用格式", "severity": "error", "scope": "local", "desc": "使用[@cite_key]格式"},
+            {"id": "R5.2", "name": "待引证标记", "severity": "warning", "scope": "local", "desc": "无文献支撑时使用[待引证]"},
+            {"id": "R5.3", "name": "引用密度", "severity": "warning", "scope": "local", "desc": "单句引用不超过指定篇数"},
+            {"id": "R5.4", "name": "文献总量", "severity": "warning", "scope": "global", "draft_skip": True, "desc": "全文引用30-45篇文献（定稿阶段生效）"},
+            {"id": "R6.1", "name": "引用位置", "severity": "error", "scope": "local", "desc": "引用标记紧跟句末标点之前"},
+            {"id": "R6.2", "name": "多文献同引", "severity": "error", "scope": "local", "desc": "使用[@id1, id2]格式"},
+            {"id": "R7.1", "name": "标题冒号", "severity": "error", "scope": "local", "desc": "标题中不使用冒号"},
+            {"id": "R7.2", "name": "自我夸大", "severity": "error", "scope": "local", "desc": "禁用夸大词汇"},
+            {"id": "R7.3", "name": "回引", "severity": "error", "scope": "local", "desc": "禁止'见本文X.X节'"},
+            {"id": "R7.4", "name": "用户意见", "severity": "warning", "scope": "local", "desc": "处理【】中的用户意见"},
+            {"id": "R8.1", "name": "全文字数", "severity": "warning", "scope": "global", "desc": "全文3000-8000字"},
+            {"id": "R8.2", "name": "段落字数", "severity": "warning", "scope": "local", "desc": "段落30-500字"},
+            {"id": "R8.3", "name": "摘要字数", "severity": "warning", "scope": "global", "draft_skip": True, "desc": "摘要200-500字（定稿阶段生效）"},
+            {"id": "R9.1", "name": "表格结构", "severity": "warning", "scope": "local", "desc": "三线表，无竖线"},
+            {"id": "R9.2", "name": "表格数据", "severity": "warning", "scope": "local", "desc": "数据格式规范"},
+            {"id": "R9.3", "name": "表格一致性", "severity": "warning", "scope": "global", "desc": "表格与正文数值一致"},
+            {"id": "R9.4", "name": "图片质量", "severity": "warning", "scope": "local", "desc": "分辨率≥300dpi"},
+            {"id": "R9.5", "name": "图片编号", "severity": "warning", "scope": "local", "desc": "按顺序编号，先文后图"},
         ]
         return json.dumps({
             "total_rules": len(rules),
             "rules": rules,
+            "scope_legend": {
+                "local": "子代理可独立检查（不依赖全局统计）",
+                "global": "仅全文合并后检查（依赖全局统计）",
+            },
+            "draft_skip_note": "draft_skip=True 的规则在 --mode chapter/draft 下跳过，--mode final 下执行",
         }, indent=2, ensure_ascii=False)
 
 

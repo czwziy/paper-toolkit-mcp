@@ -423,16 +423,41 @@ def check_abbreviation_consistency(lines: list[str], result: VerifyResult) -> No
 
 # ── R4.2 / R6.2 行文谦逊 ──────────────────────────────────
 
-def check_humble_language(lines: list[str], result: VerifyResult) -> None:
+# 默认夸大词列表（当 spec 未配置时使用）
+# 分类：A=夸大断言 B=AI高频虚词 C=过度修饰 D=伪学术腔
+_DEFAULT_BOAST_WORDS = [
+    # A. 夸大断言（无证据的绝对化表述）
+    "首次证实", "颠覆性", "革命性", "绝无仅有", "前所未有",
+    "极其创新", "突破性", "独创", "首创", "完美解决",
+    "彻底解决", "完全解决", "根本性突破", "史无前例", "划时代",
+    "里程碑式", "开创性", "改写", "重塑",
+    # B. AI 高频虚词（LLM 训练语料中过度出现的词）
+    "范式", "范式转变", "范式转换", "协同", "赋能", "解锁", "释放",
+    "催化", "驾驭", "深耕", "织就", "画卷", "景观", "领域",
+    "基石", "灯塔", "枢纽",
+    # C. 过度修饰（空泛的形容词/副词）
+    "无缝", "稳健", "全面", "关键", "至关重要", "不可或缺",
+    "精妙", "细致入微", "深刻", "显著", "卓越", "非凡",
+    "无与伦比", "引人瞩目", "令人瞩目",
+    # D. 伪学术腔（AI 偏好的学术八股）
+    "值得注意的是", "需要指出的是", "不容忽视", "毋庸置疑", "不言而喻",
+    "众所周知", "总而言之", "综上所述", "在当今", "在当下",
+    "日新月异", "蓬勃发展", "方兴未艾",
+]
+
+def check_humble_language(
+    lines: list[str],
+    result: VerifyResult,
+    *,
+    boast_words: list[str] | None = None,
+) -> None:
     """R4.2 & R6.2 检查行文谦逊与自我夸大。
 
     在非代码块行中匹配夸大词列表，报 error。
+    boast_words 通过 spec 配置注入，未配置时使用默认列表。
     """
-    boast_words = [
-        "首次证实", "颠覆性", "革命性", "绝无仅有", "前所未有",
-        "极其创新", "突破性", "独创", "首创", "完美解决",
-        "彻底解决", "完全解决", "根本性突破",
-    ]
+    if boast_words is None:
+        boast_words = _DEFAULT_BOAST_WORDS
     in_code_block = False
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
@@ -473,17 +498,29 @@ def check_heading_colon(lines: list[str], result: VerifyResult) -> None:
 
 # ── R6.3 禁止回引 ──────────────────────────────────────────
 
-def check_back_reference(lines: list[str], result: VerifyResult) -> None:
-    """R6.3 检查回引。"""
-    back_ref_patterns = [
-        r'见本文\s*\d',
-        r'如前文\s*\d',
-        r'如上文\s*\d',
-        r'本研究\s*\d+\.\d+',
-        r'前述\s*\d',
-        r'同\s*\d+\.\d+',
-        r'详见\s*\d',
-    ]
+# 默认回引正则模式（当 spec 未配置时使用）
+_DEFAULT_BACK_REF_PATTERNS = [
+    r'见本文\s*\d',
+    r'如前文\s*\d',
+    r'如上文\s*\d',
+    r'本研究\s*\d+\.\d+',
+    r'前述\s*\d',
+    r'同\s*\d+\.\d+',
+    r'详见\s*\d',
+]
+
+def check_back_reference(
+    lines: list[str],
+    result: VerifyResult,
+    *,
+    back_reference_patterns: list[str] | None = None,
+) -> None:
+    """R6.3 检查回引。
+
+    back_reference_patterns 通过 spec 配置注入，未配置时使用默认模式。
+    """
+    if back_reference_patterns is None:
+        back_reference_patterns = _DEFAULT_BACK_REF_PATTERNS
     in_code_block = False
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
@@ -492,7 +529,7 @@ def check_back_reference(lines: list[str], result: VerifyResult) -> None:
             continue
         if in_code_block:
             continue
-        for pattern in back_ref_patterns:
+        for pattern in back_reference_patterns:
             if re.search(pattern, line):
                 result.add(Violation(
                     rule="R6.3",

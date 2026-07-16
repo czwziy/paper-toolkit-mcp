@@ -9,9 +9,15 @@
 语言要求：全文必须使用中文撰写。
 
 用法：
+    # 全量检查（默认，定稿阶段使用）
     python .harness/verify.py manuscript.md
     python .harness/verify.py manuscript.md --verbose
     python .harness/verify.py manuscript.md --rule R0.1 R5.1
+
+    # 按模式检查
+    python .harness/verify.py manuscript.md --mode chapter   # 子代理单章节
+    python .harness/verify.py manuscript.md --mode draft     # 全文撰写中
+    python .harness/verify.py manuscript.md --mode final     # 定稿（同默认）
 """
 
 import sys
@@ -23,32 +29,116 @@ import functools
 # ── 导入检查模块 ──────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent))
 from checks import VerifyResult, load_markdown
-from checks.language import ALL_LANGUAGE_CHECKS
-from checks.structure import ALL_STRUCTURE_CHECKS, check_total_word_count, check_paragraph_word_count, check_abstract_word_count
-from checks.citations import ALL_CITATION_CHECKS, check_total_reference_count
+from checks.language import (
+    ALL_LANGUAGE_CHECKS,
+    check_humble_language,
+    check_back_reference,
+    _DEFAULT_BOAST_WORDS,
+    _DEFAULT_BACK_REF_PATTERNS,
+)
+from checks.structure import (
+    check_heading_hierarchy,
+    check_heading_length,
+    check_total_word_count,
+    check_paragraph_word_count,
+    check_abstract_word_count,
+)
+from checks.citations import (
+    ALL_CITATION_CHECKS,
+    check_total_reference_count,
+    check_citation_density,
+)
 from checks.data import ALL_DATA_CHECKS
+
+
+# ── 规则 scope 定义 ──────────────────────────────────────
+# local: 子代理可独立检查的规则（不依赖全局统计）
+# global: 仅全文合并后才有意义的规则
+
+RULE_SCOPES: dict[str, str] = {
+    # R0 语言
+    "R0.1": "local",
+    "R0.2": "local",
+    # R1 结构
+    "R1.1": "local",
+    "R1.2": "local",
+    "R1.3": "local",
+    "R1.4": "local",
+    # R2 数据
+    "R2.1": "local",
+    "R2.2": "local",
+    "R2.3": "local",
+    "R2.4": "local",
+    "R2.5": "global",
+    # R3 章节
+    "R3.1": "global",
+    # R4 行文
+    "R4.1": "local",
+    "R4.2": "local",
+    # R5 引用
+    "R5.1": "local",
+    "R5.2": "local",
+    "R5.3": "local",
+    "R5.4": "global",
+    # R6 引用格式
+    "R6.1": "local",
+    "R6.2": "local",
+    # R7 AI痕迹
+    "R7.1": "local",
+    "R7.2": "local",
+    "R7.3": "local",
+    "R7.4": "local",
+    # R8 字数
+    "R8.1": "global",
+    "R8.2": "local",
+    "R8.3": "global",
+    # R9 图表
+    "R9.1": "local",
+    "R9.2": "local",
+    "R9.3": "global",
+    "R9.4": "local",
+    "R9.5": "local",
+}
+
+# draft 模式下跳过的规则（摘要/关键词/参考文献列表在定稿后才生成）
+DRAFT_SKIP_RULES = {"R8.3", "R5.4"}
 
 
 # ── 合并所有检查 ──────────────────────────────────────────
 
 def _build_all_checks(spec: dict) -> dict:
-    """合并所有检查模块的规则，根据 spec 配置包装 R8 函数。"""
+    """合并所有检查模块的规则，根据 spec 配置包装需要参数的函数。"""
     all_checks = {}
     all_checks.update(ALL_DATA_CHECKS)
     all_checks.update(ALL_LANGUAGE_CHECKS)
-    all_checks.update(ALL_CITATION_CHECKS)
 
-    # structure 模块的 R8 函数需要配置参数
-    wc = spec.get("word_count", {})
-    all_checks["R1.1"] = ALL_STRUCTURE_CHECKS["R1.1"]
-    all_checks["R1.2"] = ALL_STRUCTURE_CHECKS["R1.2"]
-
-    # citations 模块的 R5.4 函数需要配置参数
+    # ── citations 模块：需要参数注入的函数 ──
     ct = spec.get("citations", {})
+    all_checks["R5.3"] = functools.partial(
+        check_citation_density,
+        max_per_sentence=ct.get("max_per_sentence", 2),
+    )
     all_checks["R5.4"] = functools.partial(
         check_total_reference_count,
         min_total=ct.get("min_total", 20),
         max_total=ct.get("max_total", 45),
+    )
+    # R5.1, R5.2, R6.1, R6.2 不需要参数，从 ALL_CITATION_CHECKS 复制
+    for key in ("R5.1", "R5.2", "R6.1", "R6.2"):
+        if key in ALL_CITATION_CHECKS:
+            all_checks[key] = ALL_CITATION_CHECKS[key]
+
+    # ── structure 模块：需要参数注入的函数 ──
+    wc = spec.get("word_count", {})
+    st = spec.get("structure", {})
+
+    all_checks["R1.1"] = functools.partial(
+        check_heading_hierarchy,
+        heading_max_depth=st.get("heading_max_depth", 4),
+    )
+    all_checks["R1.2"] = functools.partial(
+        check_heading_length,
+        heading_max_length=st.get("heading_max_length", 15),
     )
     all_checks["R8.1"] = functools.partial(
         check_total_word_count,
@@ -62,9 +152,34 @@ def _build_all_checks(spec: dict) -> dict:
     )
     all_checks["R8.3"] = functools.partial(
         check_abstract_word_count,
-        abstract_min=200,
-        abstract_max=500,
+        abstract_min=wc.get("abstract_min", 200),
+        abstract_max=wc.get("abstract_max", 500),
     )
+
+    # ── language 模块：需要参数注入的函数 ──
+    lang = spec.get("language", {})
+    boast_words = lang.get("boast_words", _DEFAULT_BOAST_WORDS)
+    back_ref_patterns = lang.get("back_reference_patterns", _DEFAULT_BACK_REF_PATTERNS)
+
+    # R4.2 / R6.2 共用 check_humble_language，注入 boast_words
+    all_checks["R4.2"] = functools.partial(
+        check_humble_language,
+        boast_words=boast_words,
+    )
+    all_checks["R6.2"] = functools.partial(
+        check_humble_language,
+        boast_words=boast_words,
+    )
+    # R6.3 注入 back_reference_patterns
+    all_checks["R6.3"] = functools.partial(
+        check_back_reference,
+        back_reference_patterns=back_ref_patterns,
+    )
+    # R0.1, R0.2, R1.3, R1.4, R3.1, R4.1, R6.1, R7.3 不需要参数
+    for key in ("R0.1", "R0.2", "R1.3", "R1.4", "R3.1", "R4.1", "R6.1", "R7.3"):
+        if key in ALL_LANGUAGE_CHECKS:
+            all_checks[key] = ALL_LANGUAGE_CHECKS[key]
+
     return all_checks
 
 
@@ -83,7 +198,7 @@ def _load_spec() -> dict:
 
 
 def _simple_yaml_parse(path: Path) -> dict:
-    """简单的 YAML 解析（仅支持单层键值对和嵌套2层）。"""
+    """简单的 YAML 解析（仅支持单层键值对和嵌套2层，不支持列表值）。"""
     result: dict = {}
     current_section: Optional[str] = None
     current_dict: dict = {}
@@ -114,13 +229,69 @@ def _simple_yaml_parse(path: Path) -> dict:
 
 # ── 主流程 ────────────────────────────────────────────────
 
-def verify(filepath: str, rules: Optional[list[str]] = None, verbose: bool = False) -> VerifyResult:
+# 验证模式定义
+# chapter: 子代理写单章节 — 只跑 local 规则 + 跳过定稿规则
+# draft:   全文撰写中 — 跑所有规则但跳过定稿规则（R8.3/R5.4）
+# final:   定稿验证 — 全量检查，不跳过任何规则
+MODE_DEFINITIONS: dict[str, dict] = {
+    "chapter": {"scope": "local", "skip_draft_rules": True},
+    "draft":   {"scope": None,    "skip_draft_rules": True},
+    "final":   {"scope": None,    "skip_draft_rules": False},
+}
+
+
+def verify(
+    filepath: str,
+    rules: Optional[list[str]] = None,
+    verbose: bool = False,
+    mode: Optional[str] = None,
+) -> VerifyResult:
+    """执行验证。
+
+    Args:
+        filepath: Markdown 文件路径
+        rules: 指定检查规则列表
+        verbose: 显示详细检查过程
+        mode: 验证模式。
+            "chapter" — 子代理单章节：只跑 local 规则，跳过定稿规则
+            "draft"   — 全文撰写中：跑所有规则，但跳过定稿规则(R8.3/R5.4)
+            "final"   — 定稿验证：全量检查
+            None      — 从 spec 读取 mode.default
+    """
     lines = load_markdown(filepath)
     spec = _load_spec()
     all_checks = _build_all_checks(spec)
     result = VerifyResult()
 
+    # 确定验证模式
+    if mode is None:
+        mode_cfg = spec.get("mode", {})
+        mode = mode_cfg.get("default", "draft")
+
+    # 解析模式配置
+    mode_def = MODE_DEFINITIONS.get(mode)
+    if mode_def is None:
+        print(f"⚠️ 未知模式：{mode}，可用模式：{list(MODE_DEFINITIONS.keys())}")
+        mode_def = MODE_DEFINITIONS["draft"]
+
+    scope_filter = mode_def["scope"]
+    skip_draft_rules = mode_def["skip_draft_rules"]
+
+    # 确定要运行的规则
     checks_to_run = rules if rules else list(all_checks.keys())
+
+    # scope 过滤
+    if scope_filter:
+        checks_to_run = [r for r in checks_to_run if RULE_SCOPES.get(r) == scope_filter]
+
+    # draft 规则过滤
+    if skip_draft_rules:
+        before = set(checks_to_run)
+        checks_to_run = [r for r in checks_to_run if r not in DRAFT_SKIP_RULES]
+        skipped = before - set(checks_to_run)
+        if skipped and verbose:
+            print(f"📝 撰写模式：已跳过定稿规则 {sorted(skipped)}")
+
     seen_funcs = set()
 
     for rule_id in checks_to_run:
@@ -147,9 +318,14 @@ def main():
     parser.add_argument("--rule", nargs="*", dest="rules", help="指定检查规则（如 R0.1 R5.1）")
     parser.add_argument("--verbose", "-v", action="store_true", help="显示详细检查过程")
     parser.add_argument("--strict", action="store_true", help="严格模式：警告也视为错误")
+    parser.add_argument(
+        "--mode",
+        choices=list(MODE_DEFINITIONS.keys()),
+        help="验证模式：chapter=子代理单章节(仅local规则)，draft=全文撰写中(跳过定稿规则)，final=定稿全量检查",
+    )
     args = parser.parse_args()
 
-    result = verify(args.filepath, args.rules, args.verbose)
+    result = verify(args.filepath, args.rules, args.verbose, args.mode)
     print(result.summary())
 
     if args.strict:

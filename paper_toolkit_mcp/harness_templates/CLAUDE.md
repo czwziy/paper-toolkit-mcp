@@ -29,6 +29,12 @@ python .harness/verify.py manuscript/manuscript_v{N}.md
 
 # 带详细输出
 python .harness/verify.py manuscript/manuscript_v{N}.md --verbose
+
+# 子代理单章节验证（仅 local 规则，跳过定稿规则）
+python .harness/verify.py chapter.md --mode chapter
+
+# 定稿全量验证
+python .harness/verify.py manuscript/manuscript_v{N}.md --mode final
 ```
 
 ## 文件结构
@@ -67,3 +73,4 @@ python .harness/verify.py manuscript/manuscript_v{N}.md --verbose
 - **禁止编造文献**。所有引用必须通过 `search_papers` 或 `get_paper_by_doi` 获取。
 - **字数限制**。全文 3000-8000 字，摘要 200-500 字，段落 30-500 字。
 - **引用数量**。全文引用 30-45 篇文献。
+- **聚焦正文**。撰写时只关注正文，删除文章头尾部的摘要、关键词和参考文献列表

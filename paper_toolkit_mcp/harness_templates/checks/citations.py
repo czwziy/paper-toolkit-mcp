@@ -142,8 +142,16 @@ def check_pending_citations(lines: list[str], result: VerifyResult) -> None:
 
 # ── R5.3 引用密度 ─────────────────────────────────────────
 
-def check_citation_density(lines: list[str], result: VerifyResult) -> None:
-    """R5.3 — 检测同一句子内引用超过 2 篇的情况。"""
+def check_citation_density(
+    lines: list[str],
+    result: VerifyResult,
+    *,
+    max_per_sentence: int = 2,
+) -> None:
+    """R5.3 — 检测同一句子内引用超过阈值的情况。
+
+    max_per_sentence 通过 spec 配置注入，默认 2。
+    """
     ref_start = find_ref_section_start(lines)
     in_code_block = False
     # 简单按句分割（中文句号/分号/问号/叹号，英文句号/问号/叹号）
@@ -162,14 +170,14 @@ def check_citation_density(lines: list[str], result: VerifyResult) -> None:
         sentences = sentence_split_re.split(line)
         for sentence in sentences:
             cite_keys = re.findall(r'@([^\]\s,;]+)', sentence)
-            if len(cite_keys) > 2:
+            if len(cite_keys) > max_per_sentence:
                 result.add(
                     Violation(
                         rule="R5.3",
                         line=i,
-                        message=f"单句内引用 {len(cite_keys)} 篇文献（超过 2 篇），密度过高",
+                        message=f"单句内引用 {len(cite_keys)} 篇文献（超过 {max_per_sentence} 篇），密度过高",
                         severity="warning",
-                        fix_hint="单句引用超过 2 篇时建议精简或分散到上下文，避免堆砌引用",
+                        fix_hint=f"单句引用超过 {max_per_sentence} 篇时建议精简或分散到上下文，避免堆砌引用",
                     )
                 )
 
