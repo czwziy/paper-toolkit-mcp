@@ -22,7 +22,7 @@ def register_all(
 
     Called once by server.py after searcher instantiation.
     """
-    from . import download, harness, library, manuscript, search
+    from . import download, harness, library, manuscript, search, verify
 
     search.register(
         mcp,
@@ -41,3 +41,4 @@ def register_all(
     manuscript.register(mcp, default_cache_dir=default_cache_dir, storage=storage)
     library.register(mcp, storage=storage, default_cache_dir=default_cache_dir)
     harness.register(mcp)
+    verify.register(mcp, storage=storage)

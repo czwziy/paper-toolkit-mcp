@@ -4,9 +4,14 @@ All search results are upserted into a single SQLite database under
 ``WORK_DIR/papers.db``. Each paper gets a short, opaque ``cite_key``
 (3-letter random, e.g. ``Kxq``) that AI uses for citation — it never
 touches DOI/paper_id directly.
+
+The ``citation_scores`` table caches multi-model citation verification
+results, keyed by (cite_key, sentence_hash, model_name) for incremental
+updates.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import random
 import sqlite3
@@ -95,6 +100,27 @@ class PaperStorage:
             self._conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_cite_key ON papers(cite_key)")
         else:
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_cite_key ON papers(cite_key)")
+
+        # Citation verification scores table
+        self._conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS citation_scores (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                cite_key        TEXT NOT NULL,
+                sentence_hash   TEXT NOT NULL,
+                sentence_text   TEXT NOT NULL,
+                model_name      TEXT NOT NULL,
+                score           INTEGER NOT NULL,
+                rationale       TEXT,
+                created_at      TEXT NOT NULL,
+                UNIQUE(cite_key, sentence_hash, model_name)
+            );
+            CREATE INDEX IF NOT EXISTS idx_cs_cite_key
+                ON citation_scores(cite_key);
+            CREATE INDEX IF NOT EXISTS idx_cs_sentence
+                ON citation_scores(sentence_hash);
+            """
+        )
         self._conn.commit()
 
     def _backfill_cite_keys(self) -> None:
@@ -290,6 +316,88 @@ class PaperStorage:
             "db_path": self.db_path,
             "by_source": {r["source"]: r["cnt"] for r in by_source},
         }
+
+    # ------------------------------------------------------------------
+    # Citation verification scores
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def sentence_hash(sentence: str) -> str:
+        """Stable hash for a sentence, used as cache key."""
+        return hashlib.md5(sentence.encode("utf-8")).hexdigest()
+
+    def get_cached_scores(
+        self, cite_key: str, sentence: str
+    ) -> list[dict[str, Any]]:
+        """Return cached scores for a (cite_key, sentence) pair.
+
+        Returns a list of dicts with keys: model_name, score, rationale, created_at.
+        """
+        s_hash = self.sentence_hash(sentence)
+        rows = self._conn.execute(
+            "SELECT model_name, score, rationale, created_at "
+            "FROM citation_scores WHERE cite_key = ? AND sentence_hash = ?",
+            (cite_key, s_hash),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def upsert_score(
+        self,
+        cite_key: str,
+        sentence: str,
+        model_name: str,
+        score: int,
+        rationale: str = "",
+    ) -> None:
+        """Insert or update a single citation score record."""
+        s_hash = self.sentence_hash(sentence)
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            """
+            INSERT INTO citation_scores (cite_key, sentence_hash, sentence_text, model_name, score, rationale, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(cite_key, sentence_hash, model_name)
+            DO UPDATE SET score=excluded.score, rationale=excluded.rationale, created_at=excluded.created_at
+            """,
+            (cite_key, s_hash, sentence, model_name, score, rationale, now),
+        )
+        self._conn.commit()
+
+    def delete_scores(
+        self, cite_key: str, sentence: str | None = None
+    ) -> int:
+        """Delete cached scores. If sentence is None, delete all for cite_key.
+
+        Returns number of deleted rows.
+        """
+        if sentence is None:
+            cur = self._conn.execute(
+                "DELETE FROM citation_scores WHERE cite_key = ?", (cite_key,)
+            )
+        else:
+            s_hash = self.sentence_hash(sentence)
+            cur = self._conn.execute(
+                "DELETE FROM citation_scores WHERE cite_key = ? AND sentence_hash = ?",
+                (cite_key, s_hash),
+            )
+        self._conn.commit()
+        return cur.rowcount
+
+    def get_all_scores(
+        self, cite_key: str | None = None, limit: int = 500
+    ) -> list[dict[str, Any]]:
+        """Return citation scores, optionally filtered by cite_key."""
+        if cite_key:
+            rows = self._conn.execute(
+                "SELECT * FROM citation_scores WHERE cite_key = ? ORDER BY created_at DESC LIMIT ?",
+                (cite_key, limit),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM citation_scores ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self) -> None:
         self._conn.close()

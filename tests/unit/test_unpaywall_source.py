@@ -57,7 +57,7 @@ class TestUnpaywallResolver(unittest.TestCase):
         self.assertEqual(result.doi, "10.1000/test")
         self.assertEqual(result.source, "unpaywall")
         self.assertEqual(result.title, "Unpaywall Record")
-        self.assertEqual(result.authors, ["Alice Example", "Bob Author"])
+        self.assertEqual(result.authors, ["Example, Alice", "Author, Bob"])
         self.assertEqual(result.pdf_url, "https://example.org/paper.pdf")
         self.assertEqual(result.url, "https://example.org/paper")
         self.assertEqual(result.published_date, datetime(2023, 1, 1))

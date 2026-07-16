@@ -211,12 +211,45 @@ def _normalize_authors(authors) -> list[str]:
     """Normalize authors input to a list of individual author name strings.
 
     Handles both list of strings and comma-separated string formats.
+    Names are expected in "Surname, Given" format (as normalized by
+    ``paper.normalize_author_name``), but also handles legacy "Given Surname"
+    format for backward compatibility.
     """
     if isinstance(authors, str):
         return [a.strip() for a in authors.split(",") if a.strip()]
     if isinstance(authors, list):
         return [str(a).strip() for a in authors if str(a).strip()]
     return []
+
+
+def _split_surname_given(author: str) -> tuple[str, str]:
+    """Split an author name into (surname, given) parts.
+
+    Handles both the new normalized format ``"Surname, Given"`` and the
+    legacy format ``"Given Surname"`` for backward compatibility.
+
+    Returns:
+        A tuple of (surname, given_name).  given_name may be empty.
+    """
+    author = author.strip()
+    if not author:
+        return ("", "")
+
+    # Normalized format: "Surname, Given"
+    if ", " in author:
+        parts = author.split(", ", 1)
+        return (parts[0], parts[1] if len(parts) > 1 else "")
+
+    # Legacy format: "Given Surname" or "Surname Initials"
+    # Use the same heuristic as normalize_author_name
+    from .paper import normalize_author_name
+    normalized = normalize_author_name(author)
+    if ", " in normalized:
+        parts = normalized.split(", ", 1)
+        return (parts[0], parts[1] if len(parts) > 1 else "")
+
+    # Single word
+    return (author, "")
 
 
 def _format_author_list_gb7714(authors, max_authors: int = 3) -> str:
@@ -232,19 +265,14 @@ def _format_author_list_gb7714(authors, max_authors: int = 3) -> str:
 
     formatted = []
     for author in author_list:
-        parts = author.split()
-        if len(parts) == 1:
-            formatted.append(parts[0].upper())
-        elif len(parts) == 2:
-            surname = parts[0].upper()
-            initials = parts[1].upper()
-            if len(initials) == 1:
-                initials = initials + "."
-            formatted.append(f"{surname} {initials}")
+        surname, given = _split_surname_given(author)
+        if not given:
+            formatted.append(surname.upper())
         else:
-            surname = parts[0].upper()
-            initials = "".join(p[0].upper() + "." for p in parts[1:])
-            formatted.append(f"{surname} {initials}")
+            # Abbreviate given name parts
+            given_parts = given.split()
+            initials = "".join(p[0].upper() + "." for p in given_parts if p)
+            formatted.append(f"{surname.upper()} {initials}")
 
     if len(formatted) > max_authors:
         return ", ".join(formatted[:max_authors]) + ", et al."
@@ -259,20 +287,13 @@ def _format_author_list_apa(authors) -> str:
 
     formatted = []
     for author in author_list:
-        parts = author.split()
-        if len(parts) == 1:
-            formatted.append(parts[0])
-        elif len(parts) == 2:
-            surname = parts[0]
-            initials = parts[1]
-            if len(initials) > 1:
-                initials = ". ".join(list(initials)) + "."
-            elif len(initials) == 1:
-                initials = initials + "."
-            formatted.append(f"{surname}, {initials}")
+        surname, given = _split_surname_given(author)
+        if not given:
+            formatted.append(surname)
         else:
-            surname = parts[0]
-            initials = ". ".join(p + "." for p in parts[1:])
+            # Abbreviate given name parts
+            given_parts = given.split()
+            initials = ". ".join(p.rstrip(".").upper() + "." for p in given_parts if p)
             formatted.append(f"{surname}, {initials}")
 
     if len(formatted) == 1:
@@ -292,20 +313,13 @@ def _format_author_list_ieee(authors) -> str:
 
     formatted = []
     for author in author_list:
-        parts = author.split()
-        if len(parts) == 1:
-            formatted.append(parts[0])
-        elif len(parts) == 2:
-            initials = parts[1]
-            surname = parts[0]
-            if len(initials) > 1:
-                initials = ". ".join(list(initials)) + "."
-            elif len(initials) == 1:
-                initials = initials + "."
-            formatted.append(f"{initials} {surname}")
+        surname, given = _split_surname_given(author)
+        if not given:
+            formatted.append(surname)
         else:
-            initials = " ".join(p + "." for p in parts[1:])
-            surname = parts[0]
+            # Abbreviate given name parts, then "Initials Surname"
+            given_parts = given.split()
+            initials = " ".join(p.rstrip(".") + "." for p in given_parts if p)
             formatted.append(f"{initials} {surname}")
 
     if len(formatted) == 1:

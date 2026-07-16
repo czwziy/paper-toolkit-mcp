@@ -9,6 +9,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# CJK Unified Ideographs range — used to detect Chinese/Japanese names
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+
 # ---------------------------------------------------------------------------
 # Module-level state — set by register()
 # ---------------------------------------------------------------------------
@@ -424,7 +427,8 @@ def _format_author_year(paper: dict[str, Any]) -> str:
     """Format as '第一作者(年份)' for human review copy.
 
     For Chinese names, use the full first author name.
-    For Western names, use 'Surname'.
+    For Western names in normalized "Surname, Given" format, use 'Surname'.
+    For legacy "Given Surname" format, apply heuristic fallback.
     """
     authors = paper.get("authors", [])
     year = paper.get("year", "") or "n.d."
@@ -432,17 +436,24 @@ def _format_author_year(paper: dict[str, Any]) -> str:
         return f"Unknown({year})"
 
     first_author = str(authors[0]).strip()
-    # Western name: "Given Family" → "Family"
-    # Chinese name: keep full name
-    parts = first_author.split()
-    if len(parts) >= 2:
-        # Heuristic: if the first part looks like a Western given name
-        # (starts with uppercase, short), use the last part as surname
-        surname = parts[-1]
-    else:
-        surname = first_author
 
-    return f"{surname}({year})"
+    # CJK name: keep full name
+    if _CJK_RE.search(first_author):
+        return f"{first_author}({year})"
+
+    # Normalized format: "Surname, Given" → extract surname
+    if ", " in first_author:
+        surname = first_author.split(", ", 1)[0]
+        return f"{surname}({year})"
+
+    # Legacy format fallback: "Given Surname" → use heuristic
+    from ..paper import normalize_author_name
+    normalized = normalize_author_name(first_author)
+    if ", " in normalized:
+        surname = normalized.split(", ", 1)[0]
+        return f"{surname}({year})"
+
+    return f"{first_author}({year})"
 
 
 async def generate_ref_list(

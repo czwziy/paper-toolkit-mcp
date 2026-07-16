@@ -111,6 +111,14 @@ def register(mcp) -> None:
         # Filter out CLAUDE.md from harness_actions since we handled it separately
         harness_actions = [a for a in harness_actions if a.get("file") != "CLAUDE.md"]
 
+        # Generate verifier_models.json template if not already present
+        verifier_config_path = os.path.join(target, "verifier_models.json")
+        if not os.path.isfile(verifier_config_path):
+            from ..verifier import write_default_config
+
+            write_default_config(verifier_config_path)
+            harness_actions.append({"file": "verifier_models.json", "status": "created"})
+
         result = {
             "status": "initialized",
             "claude_md": claude_action,
@@ -121,6 +129,7 @@ def register(mcp) -> None:
             "next_steps": [
                 "Review and edit CLAUDE.md in project root (fill in {PROJECT_NAME} and {PROJECT_DESCRIPTION})",
                 "Review and edit .harness/specs/manuscript-spec.yaml for your paper",
+                "Edit .harness/verifier_models.json to configure citation verification models (at least 2 models recommended)",
                 "Run: python .harness/verify.py <your_manuscript.md>",
             ],
         }

@@ -73,7 +73,7 @@ class TestPaperToRefDict(unittest.TestCase):
             "paper_id": "10.1234/test",
             "cite_key": "Kxq",
             "title": "Test Paper Title",
-            "authors": '["Smith J", "Doe A"]',
+            "authors": '["Smith, J", "Doe, A"]',
             "published_date": "2023-06-15",
             "source": "pubmed",
             "doi": "10.1234/test",
@@ -82,17 +82,17 @@ class TestPaperToRefDict(unittest.TestCase):
         }
         result = _paper_to_ref_dict(row)
         self.assertEqual(result["title"], "Test Paper Title")
-        self.assertEqual(result["authors"], ["Smith J", "Doe A"])
+        self.assertEqual(result["authors"], ["Smith, J", "Doe, A"])
         self.assertEqual(result["year"], "2023")
         self.assertEqual(result["doi"], "10.1234/test")
 
     def test_authors_as_list(self):
         row = {
-            "authors": ["Smith J", "Doe A"],
+            "authors": ["Smith, J", "Doe, A"],
             "published_date": "2022",
         }
         result = _paper_to_ref_dict(row)
-        self.assertEqual(result["authors"], ["Smith J", "Doe A"])
+        self.assertEqual(result["authors"], ["Smith, J", "Doe, A"])
         self.assertEqual(result["year"], "2022")
 
     def test_empty_authors(self):
@@ -109,10 +109,29 @@ class TestPaperToRefDict(unittest.TestCase):
 
 
 class TestFormatAuthorYear(unittest.TestCase):
-    def test_western_name(self):
-        paper = {"authors": ["Smith John", "Doe Alice"], "year": "2023"}
+    def test_normalized_surname_given(self):
+        """Normalized 'Surname, Given' format → use surname."""
+        paper = {"authors": ["Smith, John", "Doe, Alice"], "year": "2023"}
         result = _format_author_year(paper)
-        self.assertEqual(result, "John(2023)")
+        self.assertEqual(result, "Smith(2023)")
+
+    def test_legacy_given_surname(self):
+        """Legacy 'Given Surname' format → heuristic fallback."""
+        paper = {"authors": ["Kenneth Prkachin"], "year": "2023"}
+        result = _format_author_year(paper)
+        self.assertEqual(result, "Prkachin(2023)")
+
+    def test_legacy_pubmed_style(self):
+        """Legacy 'LastName Initials' (PubMed) format → heuristic fallback."""
+        paper = {"authors": ["Marshall K"], "year": "2022"}
+        result = _format_author_year(paper)
+        self.assertEqual(result, "Marshall(2022)")
+
+    def test_cjk_name(self):
+        """CJK name → keep full name."""
+        paper = {"authors": ["张三"], "year": "2022"}
+        result = _format_author_year(paper)
+        self.assertEqual(result, "张三(2022)")
 
     def test_single_name(self):
         paper = {"authors": ["Zhang"], "year": "2022"}
@@ -125,9 +144,9 @@ class TestFormatAuthorYear(unittest.TestCase):
         self.assertEqual(result, "Unknown(2023)")
 
     def test_no_year(self):
-        paper = {"authors": ["Smith J"], "year": ""}
+        paper = {"authors": ["Smith, J"], "year": ""}
         result = _format_author_year(paper)
-        self.assertEqual(result, "J(n.d.)")
+        self.assertEqual(result, "Smith(n.d.)")
 
 
 class TestGenerateRefList(unittest.TestCase):
@@ -167,7 +186,7 @@ class TestGenerateRefList(unittest.TestCase):
                 "cite_key": "Kxq",
                 "paper_id": "10.1234/a",
                 "title": "Paper Alpha",
-                "authors": '["Smith J"]',
+                "authors": '["Smith, J"]',
                 "published_date": "2023-01-01",
                 "source": "Nature",
                 "doi": "10.1234/a",
@@ -178,7 +197,7 @@ class TestGenerateRefList(unittest.TestCase):
                 "cite_key": "JHw",
                 "paper_id": "10.1234/b",
                 "title": "Paper Beta",
-                "authors": '["Doe A"]',
+                "authors": '["Doe, A"]',
                 "published_date": "2022-06-15",
                 "source": "Science",
                 "doi": "10.1234/b",
@@ -242,7 +261,7 @@ class TestGenerateHumanReview(unittest.TestCase):
                 "cite_key": "Kxq",
                 "paper_id": "10.1234/a",
                 "title": "Paper Alpha",
-                "authors": '["Smith J"]',
+                "authors": '["Smith, J"]',
                 "published_date": "2023-01-01",
                 "source": "Nature",
                 "doi": "10.1234/a",
@@ -260,7 +279,7 @@ class TestGenerateHumanReview(unittest.TestCase):
 
                 with open(result["output_file"], encoding="utf-8") as out:
                     content = out.read()
-                self.assertIn("J(2023)", content)
+                self.assertIn("Smith(2023)", content)
                 self.assertIn("DOI:10.1234/a", content)
                 self.assertNotIn("[@Kxq]", content)
             finally:
@@ -295,7 +314,7 @@ class TestGenerateHumanReview(unittest.TestCase):
             "cite_key": "Kxq",
             "paper_id": "arxiv:1234",
             "title": "A Very Long Paper Title That Exceeds Thirty Characters",
-            "authors": '["Smith J"]',
+            "authors": '["Smith, J"]',
             "published_date": "2023-01-01",
             "source": "arxiv",
             "doi": "",
@@ -323,7 +342,7 @@ class TestGenerateHumanReview(unittest.TestCase):
             "cite_key": "Kxq",
             "paper_id": "10.1234/a",
             "title": "Paper Alpha",
-            "authors": '["Smith J"]',
+            "authors": '["Smith, J"]',
             "published_date": "2023-01-01",
             "source": "Nature",
             "doi": "10.1234/a",

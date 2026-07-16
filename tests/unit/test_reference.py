@@ -2,6 +2,7 @@
 import unittest
 
 from paper_toolkit_mcp.reference import (
+    _split_surname_given,
     format_citation_apa,
     format_citation_gb7714,
     format_citation_ieee,
@@ -190,6 +191,34 @@ class TestProcessManuscriptText(unittest.TestCase):
         ]
         result = process_manuscript_text(text, papers)
         self.assertIn("## References", result["formatted_text"])
+
+
+class TestSplitSurnameGiven(unittest.TestCase):
+    def test_normalized_surname_given(self):
+        self.assertEqual(_split_surname_given("Smith, John"), ("Smith", "John"))
+
+    def test_normalized_surname_initials(self):
+        self.assertEqual(_split_surname_given("Smith, J"), ("Smith", "J"))
+        self.assertEqual(_split_surname_given("Smith, M J"), ("Smith", "M J"))
+
+    def test_legacy_given_surname(self):
+        self.assertEqual(_split_surname_given("Kenneth Prkachin"), ("Prkachin", "Kenneth"))
+
+    def test_legacy_initial_surname(self):
+        self.assertEqual(_split_surname_given("J Jakusova"), ("Jakusova", "J"))
+
+    def test_legacy_lastname_initials(self):
+        self.assertEqual(_split_surname_given("Marshall K"), ("Marshall", "K"))
+
+    def test_single_word(self):
+        self.assertEqual(_split_surname_given("Zhang"), ("Zhang", ""))
+
+    def test_empty_string(self):
+        self.assertEqual(_split_surname_given(""), ("", ""))
+
+    def test_cjk_name(self):
+        """CJK names are kept whole — surname/given split is ambiguous."""
+        self.assertEqual(_split_surname_given("张三"), ("张三", ""))
 
 
 class TestGetPaperByIdentifier(unittest.TestCase):

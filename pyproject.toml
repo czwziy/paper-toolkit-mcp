@@ -173,11 +173,13 @@ layers = [
     "paper_toolkit_mcp.tools",
     "paper_toolkit_mcp._helpers",
     "paper_toolkit_mcp.academic_platforms",
-    "paper_toolkit_mcp.reference | paper_toolkit_mcp.pandoc_helper | paper_toolkit_mcp.cache | paper_toolkit_mcp.utils | paper_toolkit_mcp.config | paper_toolkit_mcp.paper | paper_toolkit_mcp.storage",
+    "paper_toolkit_mcp.reference | paper_toolkit_mcp.pandoc_helper | paper_toolkit_mcp.cache | paper_toolkit_mcp.utils | paper_toolkit_mcp.config | paper_toolkit_mcp.paper | paper_toolkit_mcp.storage | paper_toolkit_mcp.verifier",
 ]
 ignore_imports = [
     "paper_toolkit_mcp -> paper_toolkit_mcp.config",
     "paper_toolkit_mcp.storage -> paper_toolkit_mcp.config",
+    "paper_toolkit_mcp.verifier -> paper_toolkit_mcp.config",
+    "paper_toolkit_mcp.reference -> paper_toolkit_mcp.paper",
 ]
 
 # ───────────────────────────────────────────────────────────────────
