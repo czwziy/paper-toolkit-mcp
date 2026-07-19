@@ -38,9 +38,9 @@ class SSRNSearcher(PaperSource):
     """Metadata-only connector for SSRN search results.
 
     Capabilities:
-    - **search**: ✅ returns metadata (title, authors, abstract, date, URL)
-    - **download_pdf**: ⚠️ best-effort (works only when SSRN exposes a direct public PDF URL)
-    - **read_paper**: ⚠️ best-effort (depends on downloadable PDF)
+    - **search**: [OK] returns metadata (title, authors, abstract, date, URL)
+    - **download_pdf**: [WARN] best-effort (works only when SSRN exposes a direct public PDF URL)
+    - **read_paper**: [WARN] best-effort (depends on downloadable PDF)
 
     No API key required; uses standard HTTP requests with polite rate-limiting.
     """

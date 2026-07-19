@@ -324,7 +324,7 @@ class PaperStorage:
     @staticmethod
     def sentence_hash(sentence: str) -> str:
         """Stable hash for a sentence, used as cache key."""
-        return hashlib.md5(sentence.encode("utf-8")).hexdigest()
+        return hashlib.md5(sentence.encode("utf-8"), usedforsecurity=False).hexdigest()
 
     def get_cached_scores(
         self, cite_key: str, sentence: str

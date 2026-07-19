@@ -1,7 +1,6 @@
 # tests/unit/test_manuscript_tools.py
 """Unit tests for manuscript.py cite_key based tools (generate_ref_list, generate_human_review)."""
 import asyncio
-import json
 import os
 import tempfile
 import unittest
@@ -301,7 +300,7 @@ class TestGenerateHumanReview(unittest.TestCase):
 
                 with open(result["output_file"], encoding="utf-8") as out:
                     content = out.read()
-                self.assertIn("未找到", content)
+                self.assertIn("NOT_FOUND", content)
             finally:
                 os.unlink(path)
                 if "output_file" in result and os.path.exists(result["output_file"]):

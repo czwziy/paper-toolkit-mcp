@@ -579,8 +579,8 @@ ALL_LANGUAGE_CHECKS = {
     "R3.1": check_required_sections_chinese,
     "R4.1": check_abbreviation_consistency,
     "R4.2": check_humble_language,
-    "R6.1": check_heading_colon,
-    "R6.2": check_humble_language,  # 复用
-    "R6.3": check_back_reference,
-    "R7.3": check_user_feedback_markers,
+    "R7.1": check_heading_colon,
+    "R7.2": check_humble_language,  # 复用
+    "R7.3": check_back_reference,
+    "R8.6": check_user_feedback_markers,
 }

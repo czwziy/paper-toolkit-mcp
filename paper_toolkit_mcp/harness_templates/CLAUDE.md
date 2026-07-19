@@ -23,6 +23,10 @@
 
 ## 构建与验证
 
+所有验证命令均在终端中运行，不要通过 MCP 工具调用。
+
+### 格式规范验证
+
 ```bash
 # 运行 harness 验证（检查文稿是否符合规范）
 python .harness/verify.py manuscript/manuscript_v{N}.md
@@ -35,6 +39,28 @@ python .harness/verify.py chapter.md --mode chapter
 
 # 定稿全量验证
 python .harness/verify.py manuscript/manuscript_v{N}.md --mode final
+```
+
+### 引用准确性验证（需配置 LLM API）
+
+引用验证使用多模型 LLM 评分，需先在 `.harness/verifier_models.json` 中配置模型 API。
+配置完成后，通过 Python 脚本调用：
+
+```python
+# 单条引用验证
+from paper_toolkit_mcp.verifier import verify_single, load_verifier_config
+config = load_verifier_config()
+result = await verify_single(sentence="...", cite_key="Kxq", ...)
+
+# 全文引用验证
+from paper_toolkit_mcp.verifier import verify_manuscript, load_verifier_config
+config = load_verifier_config()
+result = await verify_manuscript(manuscript_path="manuscript/manuscript_v1.md", ...)
+
+# 检查验证模型配置连通性
+from paper_toolkit_mcp.verifier import validate_config, load_verifier_config
+config = load_verifier_config()
+result = await validate_config(config)
 ```
 
 ## 文件结构
@@ -52,6 +78,7 @@ python .harness/verify.py manuscript/manuscript_v{N}.md --mode final
 │   │   └── data.py              # R2 数据格式
 │   ├── specs/
 │   │   └── manuscript-spec.yaml # 可变标准配置
+│   ├── verifier_models.json     # 引用验证模型配置（LLM API）
 │   ├── checklist.md             # 人工审查清单
 │   └── Harness.md               # Harness 使用指南
 ├── papers.db                    # 参考文献库（SQLite，由 MCP 工具自动管理）

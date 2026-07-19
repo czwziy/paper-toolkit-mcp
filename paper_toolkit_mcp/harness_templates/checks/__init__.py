@@ -49,19 +49,19 @@ class VerifyResult:
             f"  提示：{len(self.infos)}",
         ]
         if self.errors:
-            lines.append("\n❌ 错误详情：")
+            lines.append("\n[ERROR] 错误详情：")
             for v in self.errors:
                 lines.append(f"  [{v.rule}] L{v.line}: {v.message}")
                 if v.fix_hint:
-                    lines.append(f"    ✅ FIX: {v.fix_hint}")
+                    lines.append(f"    FIX: {v.fix_hint}")
         if self.warnings:
-            lines.append("\n⚠️ 警告详情：")
+            lines.append("\n[WARN] 警告详情：")
             for v in self.warnings:
                 lines.append(f"  [{v.rule}] L{v.line}: {v.message}")
                 if v.fix_hint:
-                    lines.append(f"    💡 HINT: {v.fix_hint}")
+                    lines.append(f"    HINT: {v.fix_hint}")
         if self.infos:
-            lines.append("\nℹ️ 提示详情：")
+            lines.append("\n[INFO] 提示详情：")
             for v in self.infos:
                 lines.append(f"  [{v.rule}] L{v.line}: {v.message}")
         return "\n".join(lines)
@@ -116,6 +116,6 @@ def load_markdown(filepath: str) -> list[str]:
     from pathlib import Path
     path = Path(filepath)
     if not path.exists():
-        print(f"❌ 文件不存在：{filepath}")
+        print(f"[ERROR] 文件不存在：{filepath}")
         sys.exit(1)
     return path.read_text(encoding="utf-8").splitlines()

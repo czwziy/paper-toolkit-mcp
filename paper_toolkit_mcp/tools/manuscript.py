@@ -483,7 +483,7 @@ async def generate_ref_list(
     Returns:
         Dict with status, report, and output file path.
     """
-    from ..reference import format_citation_gb7714, format_citation_apa, format_citation_ieee
+    from ..reference import format_citation_apa, format_citation_gb7714, format_citation_ieee
 
     if _storage is None:
         return {"error": "Storage not initialized. This tool requires papers.db access."}
@@ -617,7 +617,7 @@ async def generate_human_review(
         row = _storage.get_by_cite_key(key)
         if row is None:
             failed_keys.append(key)
-            replacements[key] = f"[@{key}⚠未找到]"
+            replacements[key] = f"[@{key}:NOT_FOUND]"
             continue
 
         paper = _paper_to_ref_dict(row)

@@ -25,6 +25,14 @@ import argparse
 from pathlib import Path
 from typing import Optional
 import functools
+import io
+
+# ── Windows 终端 UTF-8 兼容 ──────────────────────────────
+# Windows 默认终端编码为 GBK，无法输出 emoji 等 Unicode 字符。
+# 强制重新绑定 stdout/stderr 为 UTF-8 编码，确保跨平台兼容。
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 # ── 导入检查模块 ──────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent))
@@ -83,15 +91,16 @@ RULE_SCOPES: dict[str, str] = {
     # R6 引用格式
     "R6.1": "local",
     "R6.2": "local",
+    "R6.3": "local",
     # R7 AI痕迹
     "R7.1": "local",
     "R7.2": "local",
     "R7.3": "local",
-    "R7.4": "local",
-    # R8 字数
+    # R8 字数与流程
     "R8.1": "global",
     "R8.2": "local",
     "R8.3": "global",
+    "R8.6": "local",
     # R9 图表
     "R9.1": "local",
     "R9.2": "local",
@@ -123,8 +132,8 @@ def _build_all_checks(spec: dict) -> dict:
         min_total=ct.get("min_total", 20),
         max_total=ct.get("max_total", 45),
     )
-    # R5.1, R5.2, R6.1, R6.2 不需要参数，从 ALL_CITATION_CHECKS 复制
-    for key in ("R5.1", "R5.2", "R6.1", "R6.2"):
+    # R5.1, R5.2, R6.1, R6.2, R6.3 不需要参数，从 ALL_CITATION_CHECKS 复制
+    for key in ("R5.1", "R5.2", "R6.1", "R6.2", "R6.3"):
         if key in ALL_CITATION_CHECKS:
             all_checks[key] = ALL_CITATION_CHECKS[key]
 
@@ -161,22 +170,22 @@ def _build_all_checks(spec: dict) -> dict:
     boast_words = lang.get("boast_words", _DEFAULT_BOAST_WORDS)
     back_ref_patterns = lang.get("back_reference_patterns", _DEFAULT_BACK_REF_PATTERNS)
 
-    # R4.2 / R6.2 共用 check_humble_language，注入 boast_words
+    # R4.2 / R7.2 共用 check_humble_language，注入 boast_words
     all_checks["R4.2"] = functools.partial(
         check_humble_language,
         boast_words=boast_words,
     )
-    all_checks["R6.2"] = functools.partial(
+    all_checks["R7.2"] = functools.partial(
         check_humble_language,
         boast_words=boast_words,
     )
-    # R6.3 注入 back_reference_patterns
-    all_checks["R6.3"] = functools.partial(
+    # R7.3 注入 back_reference_patterns
+    all_checks["R7.3"] = functools.partial(
         check_back_reference,
         back_reference_patterns=back_ref_patterns,
     )
-    # R0.1, R0.2, R1.3, R1.4, R3.1, R4.1, R6.1, R7.3 不需要参数
-    for key in ("R0.1", "R0.2", "R1.3", "R1.4", "R3.1", "R4.1", "R6.1", "R7.3"):
+    # R0.1, R0.2, R1.3, R1.4, R3.1, R4.1, R7.1, R8.6 不需要参数
+    for key in ("R0.1", "R0.2", "R1.3", "R1.4", "R3.1", "R4.1", "R7.1", "R8.6"):
         if key in ALL_LANGUAGE_CHECKS:
             all_checks[key] = ALL_LANGUAGE_CHECKS[key]
 
@@ -271,7 +280,7 @@ def verify(
     # 解析模式配置
     mode_def = MODE_DEFINITIONS.get(mode)
     if mode_def is None:
-        print(f"⚠️ 未知模式：{mode}，可用模式：{list(MODE_DEFINITIONS.keys())}")
+        print(f"[WARN] 未知模式：{mode}，可用模式：{list(MODE_DEFINITIONS.keys())}")
         mode_def = MODE_DEFINITIONS["draft"]
 
     scope_filter = mode_def["scope"]
@@ -290,14 +299,14 @@ def verify(
         checks_to_run = [r for r in checks_to_run if r not in DRAFT_SKIP_RULES]
         skipped = before - set(checks_to_run)
         if skipped and verbose:
-            print(f"📝 撰写模式：已跳过定稿规则 {sorted(skipped)}")
+            print(f"[INFO] 撰写模式：已跳过定稿规则 {sorted(skipped)}")
 
     seen_funcs = set()
 
     for rule_id in checks_to_run:
         func = all_checks.get(rule_id)
         if func is None:
-            print(f"⚠️ 未知规则：{rule_id}")
+            print(f"[WARN] 未知规则：{rule_id}")
             continue
         # 去重（多个规则ID可能共用同一函数）
         real_func = func.func if isinstance(func, functools.partial) else func
@@ -305,7 +314,7 @@ def verify(
             continue
         seen_funcs.add(real_func)
         if verbose:
-            print(f"🔍 检查 {rule_id}...")
+            print(f"[CHECK] 检查 {rule_id}...")
         func(lines, result)
         result.total_checks += 1
 

@@ -66,6 +66,7 @@ ruff check paper_toolkit_mcp tests \
 - **测试拆分**：`tests/unit/` 必须离线 hermetic（mock 所有外部 IO）；任何在 import 或 setUp 阶段触网、或断言真实 API 响应的测试放 `tests/integration/`。CI 只跑 `tests/unit/`。
 - **不可逆操作**：不允许 `git push --force` 到 main/master；不允许删除 `csl/` 内置引用样式文件。
 - **入库操作**：存入到数据库中的元数据，必须要有摘要
+- 代码中严禁使用emoji进行输出提示
 
 
 ## 棕地陷阱（不要复制旧模式）

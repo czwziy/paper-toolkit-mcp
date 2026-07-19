@@ -7,6 +7,7 @@
 - R5.4  文献总量
 - R6.1  引用位置
 - R6.2  多文献同引格式
+- R6.3  分号与引用的对应
 """
 
 from __future__ import annotations
@@ -314,6 +315,57 @@ def check_multi_citation_format(lines: list[str], result: VerifyResult) -> None:
             )
 
 
+# ── R6.3 分号与引用的对应 ────────────────────────────────
+
+def check_semicolon_citation(lines: list[str], result: VerifyResult) -> None:
+    """R6.3 — 分号连接的多个独立论点，每个论点应有各自对应的引用标记。
+
+    检测含中文分号（；）的句子，如果分号分隔的子句中仅有一个子句
+    包含引用标记，则标记为疑似违规（需人工确认）。
+    """
+    in_code_block = False
+    ref_start = find_ref_section_start(lines)
+
+    for i, line in enumerate(lines, 1):
+        if is_code_block_start(line):
+            in_code_block = not in_code_block
+            continue
+        if in_code_block:
+            continue
+        if i - 1 >= ref_start:
+            continue
+
+        # 按中文分号拆分子句
+        clauses = line.split('；')
+        if len(clauses) < 2:
+            continue
+
+        # 统计每个子句中的引用标记数
+        clause_cite_counts = []
+        for clause in clauses:
+            cites = re.findall(r'\[@[^\]]+\]', clause)
+            clause_cite_counts.append(len(cites))
+
+        total_cites = sum(clause_cite_counts)
+        # 仅当整行有引用但并非每个子句都有引用时报警
+        if total_cites > 0:
+            clauses_without_cite = sum(1 for c in clause_cite_counts if c == 0)
+            if clauses_without_cite > 0:
+                result.add(
+                    Violation(
+                        rule="R6.3",
+                        line=i,
+                        message=(
+                            f"分号连接 {len(clauses)} 个子句中 "
+                            f"{clauses_without_cite} 个无引用，"
+                            f"疑似引用跨分号支撑多个论点"
+                        ),
+                        severity="warning",
+                        fix_hint="每个分号分隔的独立论点应各有引用支撑，如'...论点A[@key1]；...论点B[@key2]。'",
+                    )
+                )
+
+
 # ── 导出 ──────────────────────────────────────────────────
 
 ALL_CITATION_CHECKS = {
@@ -323,4 +375,5 @@ ALL_CITATION_CHECKS = {
     "R5.4": check_total_reference_count,
     "R6.1": check_citation_position,
     "R6.2": check_multi_citation_format,
+    "R6.3": check_semicolon_citation,
 }
